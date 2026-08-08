@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
+import { useCart } from "@/components/CartProvider";
 import {
   Search,
   ShoppingCart,
@@ -10,7 +11,6 @@ import {
   Menu,
   ChevronDown,
   Sparkles,
-  MapPin,
   Tag,
   Flame,
   LogOut,
@@ -22,6 +22,7 @@ import {
 export default function DigikalaHeader() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const { itemCount } = useCart();
   
   // دریافت وضعیت سشن کاربر از NextAuth
   const { data: session, status } = useSession();
@@ -140,9 +141,11 @@ export default function DigikalaHeader() {
             className="relative p-2.5 rounded-xl hover:bg-slate-100 transition-colors text-slate-700"
           >
             <ShoppingCart className="w-5 h-5" />
-            <span className="absolute top-1 left-1 bg-[#ef394e] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-              0
-            </span>
+            {itemCount > 0 && (
+              <span className="absolute top-0 left-0 flex min-w-4 h-4 items-center justify-center rounded-full bg-[#ef394e] px-1 text-[10px] font-bold text-white">
+                {itemCount.toLocaleString("fa-IR")}
+              </span>
+            )}
           </Link>
         </div>
       </div>
@@ -185,12 +188,6 @@ export default function DigikalaHeader() {
               <Sparkles className="w-4 h-4 text-purple-600" />
               <span>تحلیل هوشمند AI</span>
             </Link>
-          </div>
-
-          {/* انتخاب شهر */}
-          <div className="flex items-center gap-1 text-slate-500 hover:text-slate-800 cursor-pointer">
-            <MapPin className="w-3.5 h-3.5" />
-            <span>لطفاً شهر خود را انتخاب کنید</span>
           </div>
         </div>
       </div>

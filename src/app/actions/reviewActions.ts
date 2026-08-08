@@ -1,62 +1,109 @@
 "use server";
 
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
-export async function addReviewAction(formData: FormData) {
+export type ReviewActionState = {
+  status: "idle" | "success" | "error";
+  message: string;
+};
+
+export async function addReviewAction(
+  productId: string,
+  _previousState: ReviewActionState,
+  formData: FormData,
+): Promise<ReviewActionState> {
   const session = await getServerSession(authOptions);
-  
-  // بررسی وجود نشست (Session)
-  if (!session || !session.user) {
-    throw new Error("لطفا ابتدا وارد حساب کاربری خود شوید");
+
+  if (!session?.user) {
+    return {
+      status: "error",
+      message: "برای ثبت دیدگاه ابتدا وارد حساب کاربری خود شوید.",
+    };
   }
 
-  // استخراج شناسه کاربر (ممکن است در سیستم شما موبایل یا آیدی باشد)
-  // در NextAuth گاهی شماره موبایل درون فیلد ایمیل قرار می‌گیرد
-  const identifier = session.user.email || (session.user as any).mobile || (session.user as any).id;
+  const content = String(formData.get("content") ?? "").trim();
+  const rating = Number(formData.get("rating"));
+
+  if (content.length < 10) {
+    return {
+      status: "error",
+      message: "متن دیدگاه باید حداقل ۱۰ کاراکتر باشد.",
+    };
+  }
+
+  if (content.length > 1000) {
+    return {
+      status: "error",
+      message: "متن دیدگاه نمی‌تواند بیشتر از ۱۰۰۰ کاراکتر باشد.",
+    };
+  }
+
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return {
+      status: "error",
+      message: "امتیاز انتخاب‌شده معتبر نیست.",
+    };
+  }
+
+  const sessionUser = session.user as typeof session.user & { id?: string };
+  const identifier = sessionUser.id || session.user.email;
 
   if (!identifier) {
-    throw new Error("شناسه کاربری در نشست (session) یافت نشد.");
+    return {
+      status: "error",
+      message: "شناسه حساب کاربری پیدا نشد. لطفاً دوباره وارد شوید.",
+    };
   }
 
-  // پیدا کردن کاربر با پشتیبانی از ایمیل، شماره موبایل یا آیدی
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email: identifier },
-        { mobile: identifier },
-        { id: identifier } // اگر شناسه کاربر یک استرینگ (مانند UUID یا ObjectID) باشد
-      ]
-    }
-  });
+  const [user, product] = await Promise.all([
+    prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: identifier },
+          { email: identifier },
+          { mobile: identifier },
+        ],
+      },
+      select: { id: true },
+    }),
+    prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    }),
+  ]);
 
   if (!user) {
-    throw new Error("کاربر یافت نشد. ممکن است اطلاعات کاربری شما تغییر کرده باشد.");
+    return {
+      status: "error",
+      message: "حساب کاربری شما در پایگاه داده پیدا نشد.",
+    };
   }
 
-  // دریافت اطلاعات فرم
-  const productId = formData.get("productId") as string;
-  const comment = formData.get("comment") as string;
-  const rating = parseInt(formData.get("rating") as string, 10);
-
-  if (!productId || !comment || isNaN(rating)) {
-    throw new Error("اطلاعات ارسال شده برای ثبت نظر نامعتبر است.");
+  if (!product) {
+    return {
+      status: "error",
+      message: "این محصول دیگر در دسترس نیست.",
+    };
   }
 
-  // ثبت نظر در دیتابیس
   await prisma.review.create({
     data: {
       productId,
       userId: user.id,
-      content: comment,
+      content,
       rating,
-      sentiment: rating >= 4 ? "POSITIVE" : rating <= 2 ? "NEGATIVE" : "NEUTRAL"
-    }
+      sentiment:
+        rating >= 4 ? "POSITIVE" : rating <= 2 ? "NEGATIVE" : "NEUTRAL",
+    },
   });
 
-  // رفرش کردن کش صفحه برای نمایش فوری نظر 
-  // (مطابق ارور شما مسیر product است)
   revalidatePath(`/product/${productId}`);
+
+  return {
+    status: "success",
+    message: "دیدگاه شما با موفقیت ثبت شد.",
+  };
 }

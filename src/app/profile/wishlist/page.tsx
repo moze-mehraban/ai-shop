@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Heart, ArrowRight } from "lucide-react";
+import WishlistButton from "@/components/WishlistButton";
+import DigikalaHeader from "@/components/DigikalaHeader";
+import Image from "next/image";
 
 export default async function WishlistPage() {
   const session = await getServerSession(authOptions);
@@ -22,8 +25,9 @@ export default async function WishlistPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50">
+      <DigikalaHeader />
+      <div className="max-w-4xl mx-auto space-y-6 py-8 px-4">
         
         {/* هدر صفحه */}
         <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -64,14 +68,21 @@ export default async function WishlistPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {wishlistItems.map((item:any) => {
+            {wishlistItems.map((item) => {
               const product = item.product;
               return (
                 <div key={item.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4">
                   <div className="flex items-start gap-4">
                     <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-400 shrink-0 overflow-hidden">
                       {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" />
+                        <Image
+                          src={product.imageUrl}
+                          alt={product.title}
+                          width={80}
+                          height={80}
+                          unoptimized
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         <span>AI</span>
                       )}
@@ -80,18 +91,23 @@ export default async function WishlistPage() {
                       <h3 className="font-bold text-slate-800 text-sm line-clamp-1">{product.title}</h3>
                       <p className="text-xs text-slate-500 line-clamp-2">{product.description}</p>
                       <div className="pt-2 font-bold text-slate-900 text-xs">
-                        {product.price.toLocaleString()} تومان
+                        {product.price.toLocaleString("fa-IR")} تومان
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                     <Link
-                      href={`/products/${product.id}`}
+                      href={`/product/${product.id}`}
                       className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors text-center"
                     >
                       مشاهده کالا
                     </Link>
+                    <WishlistButton
+                      productId={product.id}
+                      initialWishlisted
+                      variant="remove"
+                    />
                   </div>
                 </div>
               );

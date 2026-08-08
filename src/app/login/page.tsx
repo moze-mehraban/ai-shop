@@ -3,10 +3,12 @@
 import { useState, useRef } from 'react';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Smartphone } from 'lucide-react';
 import { requestOtpAction } from '@/app/actions/authActions';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [mobile, setMobile] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '']);
@@ -35,7 +37,7 @@ export default function LoginPage() {
       }
 
       setStep(2);
-    } catch (err) {
+    } catch {
       setError('خطا در ارتباط با سرور.');
     } finally {
       setLoading(false);
@@ -97,9 +99,16 @@ export default function LoginPage() {
         setError('کد تایید اشتباه یا منقضی شده است.');
         setLoading(false);
       } else {
-        window.location.href = '/';
+        const requestedCallback = new URLSearchParams(window.location.search).get('callbackUrl');
+        const callbackUrl =
+          requestedCallback?.startsWith('/') && !requestedCallback.startsWith('//')
+            ? requestedCallback
+            : '/';
+
+        router.push(callbackUrl);
+        router.refresh();
       }
-    } catch (err) {
+    } catch {
       setError('خطا در برقراری ارتباط با سرور.');
       setLoading(false);
     }

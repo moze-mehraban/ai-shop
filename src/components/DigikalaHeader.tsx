@@ -15,6 +15,7 @@ import {
   Flame,
   LogOut,
   Package,
+  LayoutDashboard,
   Heart,
   Loader2,
 } from "lucide-react";
@@ -97,6 +98,17 @@ export default function DigikalaHeader() {
                     <Package className="w-4 h-4 text-slate-500" />
                     <span>سفارش‌های من</span>
                   </Link>
+
+                  {session.user.role === "ADMIN" && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 font-bold text-purple-700 transition-colors hover:bg-purple-50"
+                    >
+                      <LayoutDashboard className="h-4 w-4" />
+                      <span>پنل مدیریت</span>
+                    </Link>
+                  )}
 
                   <Link
                     href="/profile/wishlist"

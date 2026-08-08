@@ -1,0 +1,150 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// نقش‌های کاربری
+enum Role {
+  USER
+  ADMIN
+}
+
+// وضعیت‌های سفارش
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELED
+}
+
+// وضعیت احساسات نظر (تحلیل AI)
+enum Sentiment {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+// ۱. جدول کاربران
+model User {
+  id        String     @id @default(cuid())
+  name      String?    // اختیاری (کاربر بعد از ورود می‌تواند نامش را تکمیل کند)
+  email     String?    @unique // اختیاری (برای ورود با ایمیل یا موبایل)
+  password  String?    // اختیاری (چون در ورود با OTP رمز عبور وجود ندارد)
+  mobile    String?    @unique // جدید: برای ورود با شماره موبایل
+  role      Role       @default(USER)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  reviews   Review[]
+  orders    Order[]
+  wishlist  Wishlist[]
+  }
+
+// ۲. جدول دسته‌بندی محصولات
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  products Product[]
+}
+
+// ۳. جدول محصولات
+model Product {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  price       Float
+  stock       Int         @default(0)
+  imageUrl    String?
+  
+  categoryId  String
+  category    Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  reviews     Review[]
+  orderItems  OrderItem[]
+  wishlists   Wishlist[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+// ۴. جدول نظرات و تحلیل هوش مصنوعی
+model Review {
+  id          String     @id @default(cuid())
+  rating      Int        // امتیاز از ۱ تا ۵
+  content     String     // متن اصلی نظر کاربر
+
+  // ارتباط با کاربر و محصول
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  productId   String
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // فیلدهای اختصاصی هوش مصنوعی
+  isAnalyzed  Boolean    @default(false)
+  sentiment   Sentiment? // مثبت، منفی یا خنثی
+  strengths   Json?      // لیست نقاط قوت به صورت JSON (مثلاً ["کیفیت ساخت", "عمر باتری"])
+  weaknesses  Json?      // لیست نقاط ضعف به صورت JSON (مثلاً ["قیمت بالا"])
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// ۵. جدول سفارشات
+model Order {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  totalAmount Float
+  status      OrderStatus @default(PENDING)
+  items       OrderItem[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+// ۶. جدول آیتم‌های هر سفارش
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  
+  quantity  Int      @default(1)
+  price     Float    // ثبت قیمت در لحظه خرید
+}
+
+// ۷. جدول علاقه‌مندی‌ها
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId]) // جلوگیری از افزودن تکراری یک محصول
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  mobile    String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([mobile])
+}

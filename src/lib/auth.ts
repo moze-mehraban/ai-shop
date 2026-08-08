@@ -37,7 +37,12 @@ export const authOptions: NextAuthOptions = {
           create: { mobile },
         });
 
-        return { id: user.id, name: user.mobile, email: user.mobile };
+        return {
+          id: user.id,
+          name: user.name || user.mobile,
+          email: user.email || user.mobile,
+          role: user.role,
+        };
       },
     }),
   ],
@@ -47,9 +52,22 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   callbacks: {
+    async jwt({ token }) {
+      if (token.sub) {
+        const user = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { role: true },
+        });
+
+        token.role = user?.role || "USER";
+      }
+
+      return token;
+    },
     async session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;
+        session.user.role = token.role || "USER";
       }
       return session;
     },

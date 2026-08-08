@@ -63,10 +63,10 @@ model Product {
   price       Float
   stock       Int         @default(0)
   imageUrl    String?
-  
   categoryId  String
   category    Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
+  aiSummary   String?
   reviews     Review[]
   orderItems  OrderItem[]
   wishlists   Wishlist[]

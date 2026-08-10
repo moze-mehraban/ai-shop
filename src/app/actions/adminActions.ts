@@ -4,6 +4,12 @@ import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import type { OrderStatus, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { summarizeReviewsWithOpenRouter } from "@/lib/openrouter";
+
+export type GenerateSummaryState = {
+  status: "idle" | "success" | "error";
+  message: string;
+};
 
 const orderStatuses: OrderStatus[] = [
   "PENDING",
@@ -183,6 +189,107 @@ export async function deleteProductAction(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/admin");
   revalidatePath("/admin/products");
+}
+
+export async function generateProductSummaryAction(
+  productId: string,
+  _previousState: GenerateSummaryState,
+  _formData: FormData,
+): Promise<GenerateSummaryState> {
+  void _previousState;
+  void _formData;
+
+  await requireAdmin("/admin/products");
+
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: {
+      id: true,
+      title: true,
+      reviews: {
+        orderBy: { createdAt: "desc" },
+        take: 40,
+        select: {
+          id: true,
+          rating: true,
+          content: true,
+        },
+      },
+    },
+  });
+
+  if (!product) {
+    return {
+      status: "error",
+      message: "محصول پیدا نشد.",
+    };
+  }
+
+  if (product.reviews.length === 0) {
+    return {
+      status: "error",
+      message: "برای این محصول هنوز دیدگاهی ثبت نشده است.",
+    };
+  }
+
+  const reviews = product.reviews
+    .map((review) => ({
+      rating: review.rating,
+      content: review.content.trim().slice(0, 1200),
+    }))
+    .filter((review) => review.content.length > 0);
+
+  if (reviews.length === 0) {
+    return {
+      status: "error",
+      message: "دیدگاه قابل تحلیلی برای این محصول وجود ندارد.",
+    };
+  }
+
+  try {
+    const summary = await summarizeReviewsWithOpenRouter({
+      productTitle: product.title,
+      reviews,
+    });
+
+    await prisma.$transaction([
+      prisma.product.update({
+        where: { id: product.id },
+        data: { aiSummary: summary },
+      }),
+      prisma.review.updateMany({
+        where: {
+          id: {
+            in: product.reviews.map((review) => review.id),
+          },
+        },
+        data: { isAnalyzed: true },
+      }),
+    ]);
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/products");
+    revalidatePath(`/product/${product.id}`);
+
+    return {
+      status: "success",
+      message: `خلاصه با تحلیل ${reviews.length.toLocaleString("fa-IR")} دیدگاه ساخته شد.`,
+    };
+  } catch (error) {
+    console.error(
+      "OpenRouter summary generation failed:",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+
+    return {
+      status: "error",
+      message:
+        error instanceof Error &&
+        error.message === "OPENROUTER_NOT_CONFIGURED"
+          ? "کلید OpenRouter در تنظیمات سرور وارد نشده است."
+          : "ساخت خلاصه با OpenRouter انجام نشد. تنظیمات کلید، مدل و اعتبار حساب را بررسی کنید.",
+    };
+  }
 }
 
 export async function updateOrderStatusAction(formData: FormData) {

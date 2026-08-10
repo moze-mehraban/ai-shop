@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
+import GenerateSummaryButton from "@/components/admin/GenerateSummaryButton";
 
 export const revalidate = 0;
 
@@ -252,12 +253,18 @@ export default async function AdminProductsPage() {
                     <textarea name="aiSummary" rows={2} defaultValue={product.aiSummary || ""} className={inputClass} placeholder="خلاصه‌ای که در صفحه محصول نمایش داده می‌شود" />
                   </label>
                   <AdminSubmitButton
-                    className="rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white transition hover:bg-slate-800"
+                    className="w-full rounded-xl bg-slate-900 px-6 py-4 text-sm font-black text-white transition hover:bg-slate-800 md:col-span-2"
                     pendingLabel="در حال ذخیره..."
                   >
                     ذخیره تغییرات
                   </AdminSubmitButton>
                 </form>
+                <div className="mt-4">
+                  <GenerateSummaryButton
+                    productId={product.id}
+                    reviewCount={product._count.reviews}
+                  />
+                </div>
                 {product._count.orderItems === 0 && (
                   <form action={deleteProductAction} className="mt-3">
                     <input type="hidden" name="productId" value={product.id} />

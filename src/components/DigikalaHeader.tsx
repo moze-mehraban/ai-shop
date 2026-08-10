@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useCart } from "@/components/CartProvider";
 import {
@@ -29,6 +30,7 @@ type HeaderCategory = {
 };
 
 export default function DigikalaHeader() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
@@ -59,6 +61,13 @@ export default function DigikalaHeader() {
     };
   }, []);
 
+  const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = searchQuery.trim();
+
+    router.push(query ? `/search?q=${encodeURIComponent(query)}` : "/search");
+  };
+
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
       {/* بخش بالای هدر: لوگو، جستجو و ورود/سبد خرید */}
@@ -72,16 +81,26 @@ export default function DigikalaHeader() {
             </div>
           </Link>
 
-          <div className="relative flex-1 hidden sm:block">
+          <form
+            onSubmit={handleSearch}
+            className="relative hidden flex-1 sm:block"
+          >
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="جستجو در میان محصولات و تحلیل‌های هوشمند..."
+              aria-label="جستجوی محصولات"
               className="w-full bg-slate-100 text-slate-800 text-xs py-2.5 pr-10 pl-4 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#ef394e]/20 focus:border-[#ef394e] border border-transparent transition-all"
             />
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
-          </div>
+            <button
+              type="submit"
+              aria-label="جستجو"
+              className="absolute right-2 top-1.5 rounded-lg p-1.5 text-slate-400 transition hover:bg-white hover:text-[#ef394e]"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          </form>
         </div>
 
         {/* سمت چپ: دکمه ورود یا پروفایل کاربر + سبد خرید */}
@@ -201,6 +220,26 @@ export default function DigikalaHeader() {
           </Link>
         </div>
       </div>
+
+      <form onSubmit={handleSearch} className="px-4 pb-3 sm:hidden">
+        <div className="relative">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="جستجوی محصول..."
+            aria-label="جستجوی محصولات"
+            className="w-full rounded-xl border border-transparent bg-slate-100 py-2.5 pr-10 pl-4 text-xs text-slate-800 outline-none transition focus:border-[#ef394e] focus:bg-white focus:ring-2 focus:ring-[#ef394e]/20"
+          />
+          <button
+            type="submit"
+            aria-label="جستجو"
+            className="absolute right-2 top-1.5 rounded-lg p-1.5 text-slate-400"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        </div>
+      </form>
 
       {/* بخش پایین هدر: منوی دسته‌بندی‌ها و لینک‌های سریع */}
       <div className="border-t border-slate-100">

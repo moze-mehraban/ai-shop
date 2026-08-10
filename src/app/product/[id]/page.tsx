@@ -202,6 +202,7 @@ export default async function ProductDetailPage({
                   productTitle={product.title}
                   imageUrl={product.imageUrl}
                   price={product.price}
+                  discountPercent={product.discountPercent}
                   stock={product.stock}
                 />
                 <div className="mt-4 border-t border-slate-200 pt-4">

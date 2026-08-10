@@ -78,6 +78,7 @@ export async function createProductAction(formData: FormData) {
   const imageUrl = getRequiredText(formData, "imageUrl");
   const categoryId = getRequiredText(formData, "categoryId");
   const price = getNumber(formData, "price");
+  const discountPercent = getNumber(formData, "discountPercent");
   const stock = getNumber(formData, "stock");
 
   if (
@@ -86,6 +87,9 @@ export async function createProductAction(formData: FormData) {
     !categoryId ||
     !Number.isFinite(price) ||
     price < 0 ||
+    !Number.isInteger(discountPercent) ||
+    discountPercent < 0 ||
+    discountPercent > 90 ||
     !Number.isInteger(stock) ||
     stock < 0
   ) {
@@ -99,6 +103,7 @@ export async function createProductAction(formData: FormData) {
       imageUrl: imageUrl || null,
       categoryId,
       price,
+      discountPercent,
       stock,
     },
   });
@@ -118,6 +123,7 @@ export async function updateProductAction(formData: FormData) {
   const categoryId = getRequiredText(formData, "categoryId");
   const aiSummary = getRequiredText(formData, "aiSummary");
   const price = getNumber(formData, "price");
+  const discountPercent = getNumber(formData, "discountPercent");
   const stock = getNumber(formData, "stock");
 
   if (
@@ -127,6 +133,9 @@ export async function updateProductAction(formData: FormData) {
     !categoryId ||
     !Number.isFinite(price) ||
     price < 0 ||
+    !Number.isInteger(discountPercent) ||
+    discountPercent < 0 ||
+    discountPercent > 90 ||
     !Number.isInteger(stock) ||
     stock < 0
   ) {
@@ -139,9 +148,12 @@ export async function updateProductAction(formData: FormData) {
       title,
       description,
       imageUrl: imageUrl || null,
-      categoryId,
+      category: {
+        connect: { id: categoryId },
+      },
       aiSummary: aiSummary || null,
       price,
+      discountPercent,
       stock,
     },
   });

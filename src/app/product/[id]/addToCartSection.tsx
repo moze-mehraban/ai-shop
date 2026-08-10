@@ -15,7 +15,7 @@ interface AddToCartProps {
   productTitle: string;
   imageUrl: string | null;
   price: number;
-  discountPrice?: number;
+  discountPercent: number;
   stock: number;
 }
 
@@ -24,7 +24,7 @@ export default function AddToCartSection({
   productTitle,
   imageUrl,
   price,
-  discountPrice,
+  discountPercent,
   stock,
 }: AddToCartProps) {
   const { addItem } = useCart();
@@ -32,12 +32,10 @@ export default function AddToCartSection({
   const [added, setAdded] = useState(false);
 
   const isOutOfStock = stock <= 0;
-  const hasDiscount =
-    typeof discountPrice === "number" && discountPrice < price;
-  const displayPrice = hasDiscount ? discountPrice : price;
-  const discountPercent = hasDiscount
-    ? Math.round(((price - discountPrice) / price) * 100)
-    : 0;
+  const hasDiscount = discountPercent > 0;
+  const displayPrice = hasDiscount
+    ? Math.round(price * (1 - discountPercent / 100))
+    : price;
 
   const handleAddToCart = () => {
     if (isOutOfStock) {

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
+import { getDiscountedPrice } from "@/lib/pricing";
 
 type CheckoutItem = {
   productId: string;
@@ -67,6 +68,7 @@ export async function createOrderAction(items: CheckoutItem[]) {
           id: true,
           title: true,
           price: true,
+          discountPercent: true,
           stock: true,
         },
       });
@@ -109,7 +111,13 @@ export async function createOrderAction(items: CheckoutItem[]) {
 
       const totalAmount = normalizedItems.reduce((sum, item) => {
         const product = productMap.get(item.productId);
-        return sum + (product?.price ?? 0) * item.quantity;
+        return (
+          sum +
+          (product
+            ? getDiscountedPrice(product.price, product.discountPercent)
+            : 0) *
+            item.quantity
+        );
       }, 0);
 
       return transaction.order.create({
@@ -121,7 +129,12 @@ export async function createOrderAction(items: CheckoutItem[]) {
             create: normalizedItems.map((item) => ({
               productId: item.productId,
               quantity: item.quantity,
-              price: productMap.get(item.productId)?.price ?? 0,
+              price: productMap.has(item.productId)
+                ? getDiscountedPrice(
+                    productMap.get(item.productId)!.price,
+                    productMap.get(item.productId)!.discountPercent,
+                  )
+                : 0,
             })),
           },
         },

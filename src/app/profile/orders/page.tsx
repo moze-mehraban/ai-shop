@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Package, Clock, CheckCircle2, XCircle, ShoppingBag, ArrowRight } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { OrderStatus } from "@prisma/client";
+import Image from "next/image";
 
 export default async function OrdersPage() {
   const session = await getServerSession(authOptions);
@@ -23,7 +26,7 @@ export default async function OrdersPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  const statusMap: Record<string, { label: string; color: string; icon: any }> = {
+  const statusMap: Record<OrderStatus, { label: string; color: string; icon: LucideIcon }> = {
     PENDING: { label: "در انتظار پرداخت", color: "bg-amber-50 text-amber-700 border-amber-200", icon: Clock },
     PAID: { label: "پرداخت شده", color: "bg-blue-50 text-blue-700 border-blue-200", icon: CheckCircle2 },
     SHIPPED: { label: "ارسال شده", color: "bg-purple-50 text-purple-700 border-purple-200", icon: Package },
@@ -32,8 +35,7 @@ export default async function OrdersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4">
-      <div className="max-w-4xl mx-auto space-y-6">
+      <main className="max-w-4xl mx-auto space-y-6 py-8 px-4">
         
         {/* هدر صفحه */}
         <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -74,8 +76,8 @@ export default async function OrdersPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {orders.map((order:any) => {
-              const statusInfo = statusMap[order.status] || statusMap.PENDING;
+            {orders.map((order) => {
+              const statusInfo = statusMap[order.status];
               const StatusIcon = statusInfo.icon;
               
               return (
@@ -94,12 +96,19 @@ export default async function OrdersPage() {
 
                   {/* آیتم‌های سفارش */}
                   <div className="space-y-3">
-                    {order.items.map((item:any) => (
+                    {order.items.map((item) => (
                       <div key={item.id} className="flex items-center justify-between gap-4 text-xs">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-400 shrink-0 overflow-hidden">
                             {item.product.imageUrl ? (
-                              <img src={item.product.imageUrl} alt={item.product.title} className="w-full h-full object-cover" />
+                              <Image
+                                src={item.product.imageUrl}
+                                alt={item.product.title}
+                                width={48}
+                                height={48}
+                                unoptimized
+                                className="w-full h-full object-cover"
+                              />
                             ) : (
                               <span>AI</span>
                             )}
@@ -127,7 +136,6 @@ export default async function OrdersPage() {
           </div>
         )}
 
-      </div>
-    </div>
+      </main>
   );
 }

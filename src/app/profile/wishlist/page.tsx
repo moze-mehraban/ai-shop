@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Heart, ArrowRight } from "lucide-react";
 import WishlistButton from "@/components/WishlistButton";
-import DigikalaHeader from "@/components/DigikalaHeader";
 import Image from "next/image";
+import { getDiscountedPrice } from "@/lib/pricing";
 
 export default async function WishlistPage() {
   const session = await getServerSession(authOptions);
@@ -25,9 +25,7 @@ export default async function WishlistPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <DigikalaHeader />
-      <div className="max-w-4xl mx-auto space-y-6 py-8 px-4">
+      <main className="max-w-4xl mx-auto space-y-6 py-8 px-4">
         
         {/* هدر صفحه */}
         <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -70,6 +68,10 @@ export default async function WishlistPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {wishlistItems.map((item) => {
               const product = item.product;
+              const finalPrice = getDiscountedPrice(
+                product.price,
+                product.discountPercent,
+              );
               return (
                 <div key={item.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4">
                   <div className="flex items-start gap-4">
@@ -91,7 +93,13 @@ export default async function WishlistPage() {
                       <h3 className="font-bold text-slate-800 text-sm line-clamp-1">{product.title}</h3>
                       <p className="text-xs text-slate-500 line-clamp-2">{product.description}</p>
                       <div className="pt-2 font-bold text-slate-900 text-xs">
-                        {product.price.toLocaleString("fa-IR")} تومان
+                        {finalPrice.toLocaleString("fa-IR")} تومان
+                        {product.discountPercent > 0 && (
+                          <span className="mr-2 rounded-full bg-rose-50 px-2 py-1 text-[10px] text-rose-600">
+                            {product.discountPercent.toLocaleString("fa-IR")}٪
+                            تخفیف
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -115,7 +123,6 @@ export default async function WishlistPage() {
           </div>
         )}
 
-      </div>
-    </div>
+      </main>
   );
 }

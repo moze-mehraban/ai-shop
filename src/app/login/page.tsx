@@ -103,7 +103,7 @@ export default function LoginPage() {
         const callbackUrl =
           requestedCallback?.startsWith('/') && !requestedCallback.startsWith('//')
             ? requestedCallback
-            : '/';
+            : '/profile';
 
         router.push(callbackUrl);
         router.refresh();

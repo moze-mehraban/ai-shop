@@ -61,6 +61,7 @@ model Product {
   title       String
   description String
   price       Float
+  discountPercent Int      @default(0)
   stock       Int         @default(0)
   imageUrl    String?
   categoryId  String

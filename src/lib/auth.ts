@@ -56,10 +56,17 @@ export const authOptions: NextAuthOptions = {
       if (token.sub) {
         const user = await prisma.user.findUnique({
           where: { id: token.sub },
-          select: { role: true },
+          select: {
+            role: true,
+            name: true,
+            email: true,
+            mobile: true,
+          },
         });
 
         token.role = user?.role || "USER";
+        token.name = user?.name || user?.mobile || "کاربر AI-Shop";
+        token.email = user?.email || undefined;
       }
 
       return token;
@@ -68,6 +75,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user && token.sub) {
         session.user.id = token.sub;
         session.user.role = token.role || "USER";
+        session.user.name = token.name;
+        session.user.email = token.email;
       }
       return session;
     },

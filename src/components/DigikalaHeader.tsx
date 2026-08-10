@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useCart } from "@/components/CartProvider";
@@ -18,15 +18,46 @@ import {
   LayoutDashboard,
   Heart,
   Loader2,
+  UserRoundCog,
 } from "lucide-react";
+
+type HeaderCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  productCount: number;
+};
 
 export default function DigikalaHeader() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const [categories, setCategories] = useState<HeaderCategory[]>([]);
   const { itemCount } = useCart();
   
   // دریافت وضعیت سشن کاربر از NextAuth
   const { data: session, status } = useSession();
+
+  useEffect(() => {
+    let isActive = true;
+
+    fetch("/api/categories")
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: HeaderCategory[]) => {
+        if (isActive) {
+          setCategories(data);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setCategories([]);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
@@ -89,6 +120,15 @@ export default function DigikalaHeader() {
                       {session.user.email}
                     </p>
                   </div>
+
+                  <Link
+                    href="/profile"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2.5 hover:bg-slate-50 transition-colors"
+                  >
+                    <UserRoundCog className="w-4 h-4 text-slate-500" />
+                    <span>اطلاعات حساب</span>
+                  </Link>
 
                   <Link
                     href="/profile/orders"
@@ -163,39 +203,77 @@ export default function DigikalaHeader() {
       </div>
 
       {/* بخش پایین هدر: منوی دسته‌بندی‌ها و لینک‌های سریع */}
-      <div className="border-t border-slate-100 hidden md:block">
+      <div className="border-t border-slate-100">
         <div className="max-w-[1400px] mx-auto px-4 flex items-center justify-between text-xs text-slate-600 font-medium">
           <div className="flex items-center gap-6 py-2.5">
             
             {/* منوی دسته‌بندی کالاها */}
-            <div className="flex items-center gap-1 text-slate-900 font-bold hover:text-[#ef394e] cursor-pointer py-1">
-              <Menu className="w-4 h-4" />
-              <span>دسته‌بندی کالاها</span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsCategoryMenuOpen((open) => !open)}
+                className="flex items-center gap-1 py-1 font-bold text-slate-900 transition hover:text-[#ef394e]"
+              >
+                <Menu className="w-4 h-4" />
+                <span>دسته‌بندی کالاها</span>
+                <ChevronDown
+                  className={`w-3 h-3 text-slate-400 transition ${
+                    isCategoryMenuOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {isCategoryMenuOpen && (
+                <div className="absolute top-full right-0 z-50 mt-3 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
+                  <p className="px-2 pb-2 text-[10px] font-bold text-slate-400">
+                    انتخاب دسته‌بندی
+                  </p>
+                  <div className="space-y-1">
+                    {categories.map((category) => (
+                      <Link
+                        key={category.id}
+                        href={`/category/${category.slug}`}
+                        onClick={() => setIsCategoryMenuOpen(false)}
+                        className="flex items-center justify-between rounded-xl px-3 py-2.5 font-bold text-slate-700 transition hover:bg-rose-50 hover:text-[#ef394e]"
+                      >
+                        <span>{category.name}</span>
+                        <span className="text-[10px] font-medium text-slate-400">
+                          {category.productCount.toLocaleString("fa-IR")} کالا
+                        </span>
+                      </Link>
+                    ))}
+                    {categories.length === 0 && (
+                      <p className="px-3 py-5 text-center text-xs text-slate-400">
+                        دسته‌بندی‌ای ثبت نشده است.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <span className="w-[1px] h-4 bg-slate-200"></span>
+            <span className="hidden w-[1px] h-4 bg-slate-200 md:block"></span>
 
             {/* لینک‌های میانبر */}
             <Link
-              href="#"
-              className="flex items-center gap-1.5 hover:text-[#ef394e] transition-colors"
+              href="/#amazing"
+              className="hidden items-center gap-1.5 hover:text-[#ef394e] transition-colors md:flex"
             >
               <Flame className="w-4 h-4 text-orange-500" />
               <span>پیشنهادهای شگفت‌انگیز</span>
             </Link>
 
             <Link
-              href="#"
-              className="flex items-center gap-1.5 hover:text-[#ef394e] transition-colors"
+              href="/#products"
+              className="hidden items-center gap-1.5 hover:text-[#ef394e] transition-colors md:flex"
             >
               <Tag className="w-4 h-4 text-slate-400" />
               <span>پرفروش‌ترین‌ها</span>
             </Link>
 
             <Link
-              href="#"
-              className="flex items-center gap-1.5 hover:text-[#ef394e] transition-colors text-purple-600 font-bold"
+              href="/#amazing"
+              className="hidden items-center gap-1.5 hover:text-[#ef394e] transition-colors text-purple-600 font-bold md:flex"
             >
               <Sparkles className="w-4 h-4 text-purple-600" />
               <span>تحلیل هوشمند AI</span>

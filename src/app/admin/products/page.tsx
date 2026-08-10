@@ -69,6 +69,7 @@ export default async function AdminProductsPage() {
           <form action={createProductAction} className="grid gap-4 md:grid-cols-2">
             <Field label="عنوان محصول" name="title" required className="md:col-span-2" />
             <Field label="قیمت (تومان)" name="price" type="number" min="0" required />
+            <Field label="درصد تخفیف" name="discountPercent" type="number" min="0" max="90" defaultValue={0} required />
             <Field label="موجودی" name="stock" type="number" min="0" required />
             <label className="space-y-1.5 text-xs font-bold text-slate-600">
               دسته‌بندی
@@ -206,7 +207,11 @@ export default async function AdminProductsPage() {
                   <p className="text-sm font-black text-slate-900">
                     {product.price.toLocaleString("fa-IR")}
                   </p>
-                  <p className="text-[10px] text-slate-400">تومان</p>
+                  <p className="text-[10px] text-slate-400">
+                    تومان
+                    {product.discountPercent > 0 &&
+                      ` • ${product.discountPercent.toLocaleString("fa-IR")}٪ تخفیف`}
+                  </p>
                 </div>
                 <span
                   className={`rounded-full px-3 py-1 text-[10px] font-black ${
@@ -225,6 +230,7 @@ export default async function AdminProductsPage() {
                   <input type="hidden" name="productId" value={product.id} />
                   <Field label="عنوان محصول" name="title" defaultValue={product.title} required className="md:col-span-2" />
                   <Field label="قیمت (تومان)" name="price" type="number" min="0" defaultValue={product.price} required />
+                  <Field label="درصد تخفیف" name="discountPercent" type="number" min="0" max="90" defaultValue={product.discountPercent} required />
                   <Field label="موجودی" name="stock" type="number" min="0" defaultValue={product.stock} required />
                   <label className="space-y-1.5 text-xs font-bold text-slate-600">
                     دسته‌بندی
@@ -284,6 +290,7 @@ function Field({
   className?: string;
   type?: string;
   min?: string;
+  max?: string;
   required?: boolean;
   defaultValue?: string | number;
   placeholder?: string;

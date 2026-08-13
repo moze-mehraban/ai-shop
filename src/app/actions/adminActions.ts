@@ -11,13 +11,13 @@ export type GenerateSummaryState = {
   message: string;
 };
 
-const orderStatuses: OrderStatus[] = [
-  "PENDING",
-  "PAID",
-  "SHIPPED",
-  "DELIVERED",
-  "CANCELED",
-];
+const nextOrderStatus: Partial<Record<OrderStatus, OrderStatus>> = {
+  PENDING: "PAID",
+  PAID: "SHIPPED",
+  SHIPPED: "DELIVERED",
+};
+
+const cancelableOrderStatuses: OrderStatus[] = ["PENDING", "PAID"];
 
 const roles: Role[] = ["USER", "ADMIN"];
 
@@ -292,24 +292,118 @@ export async function generateProductSummaryAction(
   }
 }
 
-export async function updateOrderStatusAction(formData: FormData) {
+export async function advanceOrderStatusAction(formData: FormData) {
   await requireAdmin("/admin/orders");
 
   const orderId = getRequiredText(formData, "orderId");
-  const status = getRequiredText(formData, "status") as OrderStatus;
 
-  if (!orderId || !orderStatuses.includes(status)) {
+  if (!orderId) {
     return;
   }
 
-  await prisma.order.update({
+  const order = await prisma.order.findUnique({
     where: { id: orderId },
-    data: { status },
+    select: { status: true },
+  });
+
+  if (!order) {
+    return;
+  }
+
+  const nextStatus = nextOrderStatus[order.status];
+
+  if (!nextStatus) {
+    return;
+  }
+
+  await prisma.order.updateMany({
+    where: {
+      id: orderId,
+      status: order.status,
+    },
+    data: { status: nextStatus },
   });
 
   revalidatePath("/admin");
   revalidatePath("/admin/orders");
   revalidatePath("/profile/orders");
+}
+
+export async function cancelOrderAction(formData: FormData) {
+  await requireAdmin("/admin/orders");
+
+  const orderId = getRequiredText(formData, "orderId");
+
+  if (!orderId) {
+    return;
+  }
+
+  const restoredProductIds = await prisma.$transaction(
+    async (transaction) => {
+      const order = await transaction.order.findUnique({
+        where: { id: orderId },
+        select: {
+          status: true,
+          items: {
+            select: {
+              productId: true,
+              quantity: true,
+            },
+          },
+        },
+      });
+
+      if (!order || !cancelableOrderStatuses.includes(order.status)) {
+        return [];
+      }
+
+      const cancellation = await transaction.order.updateMany({
+        where: {
+          id: orderId,
+          status: {
+            in: cancelableOrderStatuses,
+          },
+        },
+        data: { status: "CANCELED" },
+      });
+
+      if (cancellation.count !== 1) {
+        return [];
+      }
+
+      const quantitiesByProduct = new Map<string, number>();
+
+      for (const item of order.items) {
+        quantitiesByProduct.set(
+          item.productId,
+          (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity,
+        );
+      }
+
+      for (const [productId, quantity] of quantitiesByProduct) {
+        await transaction.product.update({
+          where: { id: productId },
+          data: {
+            stock: {
+              increment: quantity,
+            },
+          },
+        });
+      }
+
+      return [...quantitiesByProduct.keys()];
+    },
+  );
+
+  revalidatePath("/");
+  revalidatePath("/admin");
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin/products");
+  revalidatePath("/profile/orders");
+
+  for (const productId of restoredProductIds) {
+    revalidatePath(`/product/${productId}`);
+  }
 }
 
 export async function updateUserRoleAction(formData: FormData) {

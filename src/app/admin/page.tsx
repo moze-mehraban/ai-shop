@@ -89,6 +89,13 @@ export default async function AdminDashboardPage() {
     }),
     prisma.orderItem.groupBy({
       by: ["productId"],
+      where: {
+        order: {
+          status: {
+            not: "CANCELED",
+          },
+        },
+      },
       _sum: { quantity: true },
       orderBy: {
         _sum: { quantity: "desc" },

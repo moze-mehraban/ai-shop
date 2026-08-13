@@ -1,4 +1,7 @@
-import { updateOrderStatusAction } from "@/app/actions/adminActions";
+import {
+  advanceOrderStatusAction,
+  cancelOrderAction,
+} from "@/app/actions/adminActions";
 import AdminSubmitButton from "@/components/admin/AdminSubmitButton";
 import { prisma } from "@/lib/prisma";
 import type { OrderStatus } from "@prisma/client";
@@ -9,6 +12,7 @@ import {
   ShoppingBag,
   Truck,
   XCircle,
+  ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -43,6 +47,12 @@ const statusConfig: Record<
     className: "bg-rose-50 text-rose-700 border-rose-200",
     icon: XCircle,
   },
+};
+
+const nextStatusConfig: Partial<Record<OrderStatus, string>> = {
+  PENDING: "تأیید پرداخت",
+  PAID: "ثبت ارسال سفارش",
+  SHIPPED: "ثبت تحویل سفارش",
 };
 
 export default async function AdminOrdersPage({
@@ -125,6 +135,7 @@ export default async function AdminOrdersPage({
         {orders.map((order) => {
           const config = statusConfig[order.status];
           const StatusIcon = config.icon;
+          const nextStep = nextStatusConfig[order.status];
 
           return (
             <article
@@ -183,34 +194,53 @@ export default async function AdminOrdersPage({
                   ))}
                 </div>
 
-                <form
-                  action={updateOrderStatusAction}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                >
-                  <input type="hidden" name="orderId" value={order.id} />
-                  <label className="text-xs font-bold text-slate-600">
-                    تغییر وضعیت سفارش
-                    <select
-                      name="status"
-                      defaultValue={order.status}
-                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-[#ef394e]"
-                    >
-                      {(Object.keys(statusConfig) as OrderStatus[]).map(
-                        (orderStatus) => (
-                          <option key={orderStatus} value={orderStatus}>
-                            {statusConfig[orderStatus].label}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </label>
-                  <AdminSubmitButton
-                    className="mt-3 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800"
-                    pendingLabel="در حال بروزرسانی..."
-                  >
-                    ذخیره وضعیت
-                  </AdminSubmitButton>
-                </form>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-bold text-slate-600">
+                    مدیریت وضعیت سفارش
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-400">
+                    وضعیت فعلی: {config.label}
+                  </p>
+
+                  {nextStep && (
+                    <form action={advanceOrderStatusAction} className="mt-4">
+                      <input type="hidden" name="orderId" value={order.id} />
+                      <AdminSubmitButton
+                        className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold text-white transition hover:bg-slate-800"
+                        pendingLabel="در حال ثبت مرحله بعد..."
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        {nextStep}
+                      </AdminSubmitButton>
+                    </form>
+                  )}
+
+                  {order.status === "DELIVERED" && (
+                    <div className="mt-4 rounded-xl bg-emerald-100 px-3 py-2.5 text-center text-xs font-bold text-emerald-700">
+                      فرایند سفارش تکمیل شده است.
+                    </div>
+                  )}
+
+                  {(order.status === "PENDING" ||
+                    order.status === "PAID") && (
+                    <form action={cancelOrderAction} className="mt-3">
+                      <input type="hidden" name="orderId" value={order.id} />
+                      <AdminSubmitButton
+                        className="w-full rounded-xl border border-rose-200 bg-white px-4 py-3 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
+                        pendingLabel="در حال لغو سفارش..."
+                      >
+                        <XCircle className="h-4 w-4" />
+                        لغو سفارش
+                      </AdminSubmitButton>
+                    </form>
+                  )}
+
+                  {order.status === "CANCELED" && (
+                    <div className="mt-4 rounded-xl bg-rose-100 px-3 py-2.5 text-center text-xs font-bold text-rose-700">
+                      سفارش لغو شده و موجودی محصولات بازگردانده شده است.
+                    </div>
+                  )}
+                </div>
               </div>
             </article>
           );

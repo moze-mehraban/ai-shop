@@ -28,7 +28,7 @@ export default function GenerateSummaryButton({
     if (state.status === "success") {
       router.refresh();
     }
-  }, [router, state.status]);
+  }, [router, state]);
 
   return (
     <form

@@ -250,7 +250,14 @@ export default async function AdminProductsPage() {
                   </label>
                   <label className="space-y-1.5 text-xs font-bold text-slate-600 md:col-span-2">
                     خلاصه هوشمند
-                    <textarea name="aiSummary" rows={2} defaultValue={product.aiSummary || ""} className={inputClass} placeholder="خلاصه‌ای که در صفحه محصول نمایش داده می‌شود" />
+                    <textarea
+                      key={product.aiSummary || "empty-summary"}
+                      name="aiSummary"
+                      rows={2}
+                      defaultValue={product.aiSummary || ""}
+                      className={inputClass}
+                      placeholder="خلاصه‌ای که در صفحه محصول نمایش داده می‌شود"
+                    />
                   </label>
                   <AdminSubmitButton
                     className="w-full rounded-xl bg-slate-900 px-6 py-4 text-sm font-black text-white transition hover:bg-slate-800 md:col-span-2"

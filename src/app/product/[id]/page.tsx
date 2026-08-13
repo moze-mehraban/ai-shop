@@ -36,7 +36,23 @@ export default async function ProductDetailPage({
       reviews: {
         include: {
           user: {
-            select: { name: true },
+            select: {
+              name: true,
+              orders: {
+                where: {
+                  status: {
+                    in: ["PAID", "SHIPPED", "DELIVERED"],
+                  },
+                  items: {
+                    some: {
+                      productId: id,
+                    },
+                  },
+                },
+                select: { id: true },
+                take: 1,
+              },
+            },
           },
         },
         orderBy: { createdAt: "desc" },
@@ -319,10 +335,12 @@ export default async function ProductDetailPage({
                             <h3 className="text-sm font-black text-slate-800">
                               {review.user.name || "کاربر AI-Shop"}
                             </h3>
-                            <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
-                              <BadgeCheck className="h-3 w-3" />
-                              خریدار
-                            </span>
+                            {review.user.orders.length > 0 && (
+                              <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
+                                <BadgeCheck className="h-3 w-3" />
+                                خریدار
+                              </span>
+                            )}
                           </div>
                           <time className="mt-1 block text-[11px] text-slate-400">
                             {review.createdAt.toLocaleDateString("fa-IR", {

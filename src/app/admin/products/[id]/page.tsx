@@ -63,6 +63,8 @@ export default async function EditProductPage({
       <ProductEditor
         product={{
           id: product.id,
+          slug: product.slug,
+          discountEndsAt: product.discountEndsAt?.toISOString() ?? null,
           title: product.title,
           description: product.description,
           brand: product.brand,

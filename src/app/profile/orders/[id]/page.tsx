@@ -3,9 +3,11 @@ import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES, RETURN_STATUS_LABELS, RETURN_
 import { getPaymentDeadlineHours, getReturnWindowDays, isInFuture, paymentDeadline } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
 import { getSettings } from "@/lib/settings";
-import { ArrowRight, Check, CheckCircle2, Clock, MapPin, PackageOpen, Truck, XCircle } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, Clock, FileText, MapPin, PackageOpen, Truck, XCircle } from "lucide-react";
+import OrderPaymentBox from "./OrderPaymentBox";
 import ReturnRequestForm from "./ReturnRequestForm";
 import { getServerSession } from "next-auth";
+import { productHref } from "@/lib/slug";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -31,7 +33,7 @@ export default async function OrderDetailPage({
       include: {
         items: {
           include: {
-            product: { select: { id: true, title: true, imageUrl: true } },
+            product: { select: { id: true, slug: true, title: true, imageUrl: true } },
             returnItems: { where: { request: { status: { not: "REJECTED" } } }, select: { quantity: true } },
           },
         },
@@ -53,7 +55,9 @@ export default async function OrderDetailPage({
   const formatDateTime = (date: Date) => date.toLocaleString("fa-IR", { dateStyle: "long", timeStyle: "short" });
 
   // مهلت پرداخت (برای سفارش در انتظار پرداخت)
-  const payBy = order.status === "PENDING" ? paymentDeadline(order.createdAt, deadlineHours) : null;
+  // سفارشی که رسید پرداخت دارد خودکار لغو نمی‌شود، پس مهلت پرداخت نمایش داده نمی‌شود
+  const payBy =
+    order.status === "PENDING" && !order.receiptUploadedAt ? paymentDeadline(order.createdAt, deadlineHours) : null;
 
   // مهلت مرجوعی (برای سفارش تحویل‌شده)
   const deliveredAt = order.deliveredAt ?? (order.status === "DELIVERED" ? order.updatedAt : null);
@@ -84,8 +88,10 @@ export default async function OrderDetailPage({
           <div>
             <p className="font-black">سفارش شما با کد {code} ثبت شد.</p>
             <p className="mt-1 leading-7">
-              وضعیت سفارش از همین صفحه قابل پیگیری است.
-              {settings.phone && <> برای هماهنگی پرداخت با شماره <span dir="ltr">{settings.phone}</span> تماس بگیرید.</>}
+              {settings.cardNumber
+                ? "برای تکمیل سفارش، مبلغ را کارت‌به‌کارت کنید و تصویر رسید را در بخش «پرداخت سفارش» همین صفحه بفرستید."
+                : "وضعیت سفارش از همین صفحه قابل پیگیری است."}
+              {!settings.cardNumber && settings.phone && <> برای هماهنگی پرداخت با شماره <span dir="ltr">{settings.phone}</span> تماس بگیرید.</>}
             </p>
           </div>
         </div>
@@ -101,9 +107,17 @@ export default async function OrderDetailPage({
               ثبت‌شده در {order.createdAt.toLocaleDateString("fa-IR", { dateStyle: "long" })}
             </p>
           </div>
-          <span className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${ORDER_STATUS_STYLES[order.status]}`}>
-            {ORDER_STATUS_LABELS[order.status]}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {order.status !== "CANCELED" && (
+              <Link href={`/profile/orders/${order.id}/invoice`} className="btn-ghost px-3 py-1.5 text-xs">
+                <FileText className="h-4 w-4" />
+                فاکتور
+              </Link>
+            )}
+            <span className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${ORDER_STATUS_STYLES[order.status]}`}>
+              {ORDER_STATUS_LABELS[order.status]}
+            </span>
+          </div>
         </div>
 
         {order.status !== "CANCELED" && (
@@ -153,6 +167,27 @@ export default async function OrderDetailPage({
         )}
       </section>
 
+      {order.status === "PENDING" && (
+        <OrderPaymentBox
+          orderId={order.id}
+          amount={order.totalAmount}
+          card={
+            settings.cardNumber
+              ? { number: settings.cardNumber, holder: settings.cardHolder, bank: settings.cardBank }
+              : null
+          }
+          receipt={
+            order.receiptPath && order.receiptUploadedAt
+              ? {
+                  uploadedAt: order.receiptUploadedAt.toISOString(),
+                  reference: order.receiptRef,
+                  rejectNote: order.receiptRejectNote,
+                }
+              : null
+          }
+        />
+      )}
+
       <section className="card rounded-2xl p-5 md:p-6">
         <h2 className="mb-4 font-black text-ink">اقلام سفارش</h2>
         <ul className="divide-y divide-slate-100">
@@ -165,7 +200,7 @@ export default async function OrderDetailPage({
                 )}
               </span>
               <div className="min-w-0 flex-1 text-sm">
-                <Link href={`/product/${item.product.id}`} className="line-clamp-1 font-bold text-ink hover:text-brand-700">
+                <Link href={productHref(item.product)} className="line-clamp-1 font-bold text-ink hover:text-brand-700">
                   {item.title ?? item.product.title}
                 </Link>
                 <p className="mt-0.5 text-xs text-slate-500">

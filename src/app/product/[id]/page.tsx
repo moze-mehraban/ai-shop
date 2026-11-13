@@ -1,4 +1,5 @@
 import DigikalaHeader from "@/components/DigikalaHeader";
+import DiscountCountdown from "@/components/DiscountCountdown";
 import ProductCard from "@/components/ProductCard";
 import SiteFooter from "@/components/SiteFooter";
 import WishlistButton from "@/components/WishlistButton";
@@ -8,6 +9,7 @@ import { productCardInclude } from "@/lib/catalog";
 import { getDiscountedPrice } from "@/lib/pricing";
 import { expireUnpaidOrders } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
+import { productHref } from "@/lib/slug";
 import type { Metadata } from "next";
 import {
   BadgeCheck,
@@ -20,7 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import AddToCartSection from "./addToCartSection";
 import ProductGallery from "./ProductGallery";
 import ReviewForm from "./ReviewForm";
@@ -28,6 +30,20 @@ import ReviewForm from "./ReviewForm";
 export const revalidate = 0;
 
 type ProductPageProps = { params: Promise<{ id: string }> };
+
+// پارامتر آدرس می‌تواند آدرس خوانا (slug) یا شناسه قدیمی باشد
+async function resolveProduct(param: string) {
+  let value = param;
+  try {
+    value = decodeURIComponent(param);
+  } catch {
+    /* پارامتر رمزگذاری‌نشده */
+  }
+  return prisma.product.findFirst({
+    where: { isActive: true, OR: [{ slug: value }, { id: value }] },
+    select: { id: true, slug: true },
+  });
+}
 
 async function loadProduct(id: string) {
   return prisma.product.findFirst({
@@ -62,8 +78,9 @@ async function loadProduct(id: string) {
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
-  const { id } = await params;
-  const product = await loadProduct(id);
+  const { id: param } = await params;
+  const resolved = await resolveProduct(param);
+  const product = resolved ? await loadProduct(resolved.id) : null;
 
   if (!product) return {};
 
@@ -73,7 +90,7 @@ export async function generateMetadata({
   return {
     title: product.title,
     description,
-    alternates: { canonical: `/product/${product.id}` },
+    alternates: { canonical: productHref(product) },
     openGraph: {
       title: product.title,
       description,
@@ -84,10 +101,20 @@ export async function generateMetadata({
 }
 
 export default async function ProductDetailPage({ params }: ProductPageProps) {
-  const { id } = await params;
+  const { id: param } = await params;
   await expireUnpaidOrders();
-  const product = await loadProduct(id);
+  const resolved = await resolveProduct(param);
 
+  if (!resolved) {
+    notFound();
+  }
+  // لینک‌های قدیمی (با شناسه) به آدرس خوانا منتقل می‌شوند
+  if (resolved.slug && resolved.id === param) {
+    // هدر Location فقط کاراکترهای ASCII می‌پذیرد؛ آدرس فارسی باید کدگذاری شود
+    permanentRedirect(encodeURI(productHref(resolved)));
+  }
+
+  const product = await loadProduct(resolved.id);
   if (!product) {
     notFound();
   }
@@ -421,6 +448,9 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
               className="scroll-mt-32 lg:col-span-2 xl:col-span-1"
             >
               <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50/60 p-5 xl:sticky xl:top-32">
+                {product.discountEndsAt && product.discountPercent > 0 && (
+                  <DiscountCountdown endsAt={product.discountEndsAt.toISOString()} />
+                )}
                 <AddToCartSection
                   productId={product.id}
                   productTitle={product.title}

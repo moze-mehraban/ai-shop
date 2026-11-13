@@ -15,6 +15,8 @@ type Variant = { id?: string; name: string; price: string; stock: string };
 
 export type EditableProduct = {
   id: string;
+  slug: string | null;
+  discountEndsAt: string | null; // ISO
   title: string;
   description: string;
   brand: string | null;
@@ -44,6 +46,14 @@ export default function ProductEditor({
   specSuggestions?: Record<string, { label: string; key: boolean }[]>;
 }) {
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? "");
+  // پایان تخفیف به وقت مرورگر مدیر نمایش داده و به‌صورت ISO (با منطقه زمانی) ارسال می‌شود
+  const toLocalInput = (iso: string | null | undefined) => {
+    if (!iso) return "";
+    const date = new Date(iso);
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+  const [discountEnd, setDiscountEnd] = useState(toLocalInput(product?.discountEndsAt));
   const [specs, setSpecs] = useState<Spec[]>(product?.specs.length ? product.specs : []);
   const [variants, setVariants] = useState<Variant[]>(
     product?.variants.map((variant) => ({
@@ -123,6 +133,23 @@ export default function ProductEditor({
               <label className={label} htmlFor="title">عنوان محصول</label>
               <input id="title" name="title" required defaultValue={product?.title} className="field" />
             </div>
+            <div>
+              <label className={label} htmlFor="slug">آدرس صفحه (اختیاری)</label>
+              <div className="flex items-center gap-2" dir="ltr">
+                <span className="shrink-0 text-xs text-slate-400">/product/</span>
+                <input
+                  id="slug"
+                  name="slug"
+                  defaultValue={product?.slug ?? ""}
+                  placeholder="خالی بماند تا از روی عنوان ساخته شود"
+                  className="field py-2.5 text-right"
+                  dir="rtl"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                فقط حروف، اعداد و خط تیره. تغییر آدرس محصولی که قبلاً منتشر شده، لینک‌های قدیمیِ همان آدرس را از کار می‌اندازد.
+              </p>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className={label} htmlFor="categoryId">دسته‌بندی</label>
@@ -164,6 +191,38 @@ export default function ProductEditor({
             <div>
               <label className={label} htmlFor="discountPercent">درصد تخفیف</label>
               <input id="discountPercent" name="discountPercent" inputMode="numeric" defaultValue={product?.discountPercent ?? 0} className="field" />
+            </div>
+            <div className="sm:col-span-3">
+              <label className={label} htmlFor="discountEndsAtInput">پایان تخفیف (اختیاری)</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="discountEndsAtInput"
+                  type="datetime-local"
+                  value={discountEnd}
+                  onChange={(event) => setDiscountEnd(event.target.value)}
+                  className="field max-w-64 py-2.5"
+                  dir="ltr"
+                />
+                {[24, 72, 168].map((hours) => (
+                  <button
+                    key={hours}
+                    type="button"
+                    onClick={() => setDiscountEnd(toLocalInput(new Date(Date.now() + hours * 3600000).toISOString()))}
+                    className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-brand-300"
+                  >
+                    {hours === 168 ? "۱ هفته" : hours === 72 ? "۳ روز" : "۲۴ ساعت"}
+                  </button>
+                ))}
+                {discountEnd && (
+                  <button type="button" onClick={() => setDiscountEnd("")} className="text-xs font-bold text-rose-600">
+                    بدون پایان
+                  </button>
+                )}
+              </div>
+              <input type="hidden" name="discountEndsAt" value={discountEnd ? new Date(discountEnd).toISOString() : ""} />
+              <p className="mt-1 text-[11px] text-slate-400">
+                بعد از این زمان تخفیف خودکار برداشته می‌شود و در صفحه محصول شمارش معکوس نمایش داده می‌شود.
+              </p>
             </div>
             <div>
               <label className={label} htmlFor="stock">موجودی</label>
@@ -340,7 +399,7 @@ export default function ProductEditor({
               {product ? "ذخیره تغییرات" : "ایجاد محصول"}
             </AdminSubmitButton>
             {product && (
-              <a href={`/product/${product.id}`} target="_blank" className="btn-ghost w-full py-2.5 text-xs">
+              <a href={`/product/${product.slug || product.id}`} target="_blank" className="btn-ghost w-full py-2.5 text-xs">
                 مشاهده در فروشگاه
               </a>
             )}
@@ -406,7 +465,7 @@ export default function ProductEditor({
                 }
               />
             </label>
-            <p className="text-[11px] text-slate-400">هر تصویر حداکثر ۵ مگابایت (JPG, PNG, WEBP)</p>
+            <p className="text-[11px] text-slate-400">هر تصویر تا ۸ مگابایت؛ خودکار کوچک و به WebP فشرده می‌شود</p>
           </section>
         </aside>
       </ActionForm>

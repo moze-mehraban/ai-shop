@@ -69,10 +69,12 @@ model Category {
 // ۳. جدول محصولات
 model Product {
   id          String      @id @default(cuid())
+  slug        String?     @unique // آدرس خوانا، مثلاً «گوشی-سامسونگ-galaxy-a55»
   title       String
   description String
   price       Float
   discountPercent Int      @default(0)
+  discountEndsAt  DateTime? // پایان تخفیف زمان‌دار؛ بعد از آن تخفیف خودکار برداشته می‌شود
   stock       Int         @default(0)
   imageUrl    String?     // تصویر اصلی (کاور)
   brand       String?
@@ -145,6 +147,12 @@ model Order {
   adminNote       String?
 
   deliveredAt     DateTime? // شروع مهلت مرجوعی
+
+  // پرداخت کارت‌به‌کارت
+  receiptPath       String?   // مسیر خصوصی تصویر رسید
+  receiptRef        String?   // شماره پیگیری/مرجع واریز
+  receiptUploadedAt DateTime?
+  receiptRejectNote String?   // دلیل رد رسید توسط فروشگاه
 
   // لغو (دستی، خودکار به‌دلیل عدم پرداخت و ...)
   canceledAt      DateTime?

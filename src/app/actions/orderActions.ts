@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { evaluateCoupon, getShippingCost } from "@/lib/checkout";
 import { getDiscountedPrice } from "@/lib/pricing";
 import { prisma } from "@/lib/prisma";
-import { expireUnpaidOrders } from "@/lib/orders";
+import { cancelOrder, expireUnpaidOrders } from "@/lib/orders";
 import { getSettings } from "@/lib/settings";
 import { sendSmsIrTemplate } from "@/lib/smsir";
 import { getServerSession } from "next-auth";
@@ -236,9 +236,7 @@ export async function createOrderAction(input: CheckoutInput): Promise<CheckoutR
     revalidatePath("/admin");
     revalidatePath("/admin/orders");
     revalidatePath("/profile/orders");
-    for (const productId of new Set([...lines.values()].map((line) => line.productId))) {
-      revalidatePath(`/product/${productId}`);
-    }
+    revalidatePath("/product/[id]", "page");
 
     return {
       success: true,
@@ -253,4 +251,30 @@ export async function createOrderAction(input: CheckoutInput): Promise<CheckoutR
       message: error instanceof Error ? error.message : "ثبت سفارش با خطا مواجه شد.",
     };
   }
+}
+
+// لغو سفارش توسط خود مشتری (فقط قبل از پرداخت)
+export async function cancelMyOrderAction(orderId: string, reason: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return { success: false, message: "ابتدا وارد حساب کاربری شوید." };
+
+  const order = await prisma.order.findFirst({
+    where: { id: String(orderId ?? ""), userId: session.user.id },
+    select: { id: true, status: true },
+  });
+  if (!order) return { success: false, message: "سفارش پیدا نشد." };
+  if (order.status !== "PENDING") {
+    return { success: false, message: "این سفارش پرداخت شده است؛ برای لغو با پشتیبانی تماس بگیرید." };
+  }
+
+  const note = String(reason ?? "").trim().slice(0, 200);
+  const restored = await cancelOrder(order.id, `لغو توسط مشتری${note ? `: ${note}` : ""}`, ["PENDING"]);
+  if (restored.length === 0) return { success: false, message: "لغو سفارش انجام نشد؛ وضعیت سفارش تغییر کرده است." };
+
+  revalidatePath(`/profile/orders/${order.id}`);
+  revalidatePath("/profile/orders");
+  revalidatePath("/admin");
+  revalidatePath("/admin/orders");
+  revalidatePath("/product/[id]", "page");
+  return { success: true, message: "سفارش لغو شد." };
 }

@@ -122,6 +122,9 @@ export default async function AdminOrdersPage({
                     <span className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${ORDER_STATUS_STYLES[order.status]}`}>
                       {ORDER_STATUS_LABELS[order.status]}
                     </span>
+                    {order.status === "PENDING" && order.receiptPath && !order.receiptRejectNote && (
+                      <span className="mr-1 rounded-lg bg-sky-50 px-2 py-1 text-[11px] font-bold text-sky-700">رسید ارسال شده</span>
+                    )}
                   </td>
                 </tr>
               ))}

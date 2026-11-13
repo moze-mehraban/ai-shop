@@ -1,5 +1,6 @@
 import DigikalaHeader from "@/components/DigikalaHeader";
 import SiteFooter from "@/components/SiteFooter";
+import DiscountCountdown from "@/components/DiscountCountdown";
 import ProductCard from "@/components/ProductCard";
 import ProductRow, { ProductRowItem } from "@/components/ProductRow";
 import { getDiscountedPrice } from "@/lib/pricing";
@@ -8,6 +9,7 @@ import { getCategoryTree } from "@/lib/categories";
 import { expireUnpaidOrders } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
 import { ArrowLeft, Flame, LayoutGrid, Sparkles, Star } from "lucide-react";
+import { productHref } from "@/lib/slug";
 import Link from "next/link";
 
 export const revalidate = 0;
@@ -117,7 +119,7 @@ export default async function HomePage() {
                     return (
                       <Link
                         key={product.id}
-                        href={`/product/${product.id}`}
+                        href={productHref(product)}
                         className="group flex w-44 shrink-0 snap-start flex-col rounded-2xl border border-slate-200/70 bg-white p-3 text-slate-800 transition duration-300 hover:-translate-y-1 hover:shadow-xl sm:w-52"
                       >
                         <div className="relative mb-3 aspect-square overflow-hidden rounded-xl bg-slate-50">
@@ -142,6 +144,11 @@ export default async function HomePage() {
                         <h3 className="line-clamp-2 min-h-10 text-xs leading-5 font-bold text-ink">
                           {product.title}
                         </h3>
+                        {product.discountEndsAt && (
+                          <div className="mt-1.5">
+                            <DiscountCountdown endsAt={product.discountEndsAt.toISOString()} variant="inline" />
+                          </div>
+                        )}
                         <div className="mt-3 flex items-end justify-between border-t border-slate-100 pt-3">
                           <span className="flex items-center gap-1 text-xs font-bold text-amber-600">
                             <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />

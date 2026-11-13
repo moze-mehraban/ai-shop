@@ -35,7 +35,12 @@ export async function restoreStock(tx: Prisma.TransactionClient, lines: StockLin
  * اگر سفارش در این فاصله وضعیتش عوض شده باشد (مثلاً پرداخت شده)، کاری انجام نمی‌شود.
  * خروجی: شناسه محصولاتی که موجودی‌شان برگشت (برای revalidate در اکشن‌ها).
  */
-export async function cancelOrder(orderId: string, reason: string, allowed: OrderStatus[] = CANCELABLE_STATUSES) {
+export async function cancelOrder(
+  orderId: string,
+  reason: string,
+  allowed: OrderStatus[] = CANCELABLE_STATUSES,
+  options: { requireNoReceipt?: boolean } = {},
+) {
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
@@ -47,8 +52,9 @@ export async function cancelOrder(orderId: string, reason: string, allowed: Orde
     });
     if (!order || !allowed.includes(order.status)) return [];
 
+    // شرط‌ها هنگام لغو دوباره بررسی می‌شوند تا اگر همان لحظه پرداخت تأیید یا رسید ارسال شد، لغو انجام نشود
     const updated = await tx.order.updateMany({
-      where: { id: orderId, status: { in: allowed } },
+      where: { id: orderId, status: { in: allowed }, ...(options.requireNoReceipt ? { receiptUploadedAt: null } : {}) },
       data: { status: "CANCELED", canceledAt: new Date(), cancelReason: reason.slice(0, 300) || null },
     });
     if (updated.count !== 1) return [];
@@ -94,18 +100,31 @@ export async function expireUnpaidOrders({ force = false } = {}) {
   globalForExpiry.__lastOrderExpiry = now;
 
   try {
+    // تخفیف‌های زمان‌دار منقضی‌شده برداشته می‌شوند
+    const expiredDiscounts = await prisma.product.updateMany({
+      where: { discountEndsAt: { lte: new Date(now) } },
+      data: { discountPercent: 0, discountEndsAt: null },
+    });
+    if (expiredDiscounts.count > 0) console.info(`[products] ${expiredDiscounts.count} timed discount(s) ended`);
+
     const hours = await getPaymentDeadlineHours();
     if (hours <= 0) return 0;
 
     const expired = await prisma.order.findMany({
-      where: { status: "PENDING", createdAt: { lt: new Date(now - hours * 60 * 60 * 1000) } },
+      where: {
+        status: "PENDING",
+        createdAt: { lt: new Date(now - hours * 60 * 60 * 1000) },
+        // سفارشی که مشتری حتی یک بار رسید پرداخت برایش فرستاده، هرگز خودکار لغو نمی‌شود
+        // (حتی اگر رسید رد شده باشد؛ ممکن است واقعاً پرداخت کرده باشد) — تصمیم با مدیر است
+        receiptUploadedAt: null,
+      },
       select: { id: true, recipientMobile: true, user: { select: { mobile: true } } },
       take: 200,
     });
 
     let canceled = 0;
     for (const order of expired) {
-      const restored = await cancelOrder(order.id, AUTO_CANCEL_REASON, ["PENDING"]);
+      const restored = await cancelOrder(order.id, AUTO_CANCEL_REASON, ["PENDING"], { requireNoReceipt: true });
       if (restored.length === 0) continue;
       canceled += 1;
       const mobile = order.recipientMobile || order.user.mobile;

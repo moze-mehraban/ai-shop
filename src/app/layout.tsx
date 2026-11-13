@@ -24,6 +24,8 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: settings.shopTagline || "فروشگاه اینترنتی",
     openGraph: { locale: "fa_IR", siteName: settings.shopName },
+    // نصب روی صفحه اصلی آیفون
+    appleWebApp: { capable: true, title: settings.shopName, statusBarStyle: "default" },
   };
 }
 

@@ -45,6 +45,7 @@ export default async function AdminDashboardPage() {
     pendingReviews,
     waitingRestock,
     pendingReturns,
+    receiptsToReview,
   ] = await Promise.all([
     prisma.product.count(),
     prisma.user.count(),
@@ -109,14 +110,16 @@ export default async function AdminDashboardPage() {
       },
       take: 5,
     }),
-    prisma.order.count({ where: { status: "PENDING" } }),
+    prisma.order.count({ where: { status: "PENDING", OR: [{ receiptPath: null }, { receiptRejectNote: { not: null } }] } }),
     prisma.order.count({ where: { status: "PAID" } }),
     prisma.review.count({ where: { isApproved: false } }),
     prisma.stockNotification.count({ where: { notifiedAt: null } }),
     prisma.returnRequest.count({ where: { status: { in: ["REQUESTED", "RECEIVED"] } } }),
+    prisma.order.count({ where: { status: "PENDING", receiptPath: { not: null }, receiptRejectNote: null } }),
   ]);
 
   const todos = [
+    { count: receiptsToReview, label: "رسید پرداخت در انتظار تأیید", href: "/admin/orders?status=PENDING" },
     { count: pendingOrders, label: "سفارش در انتظار پرداخت", href: "/admin/orders?status=PENDING" },
     { count: paidOrders, label: "سفارش آماده ارسال", href: "/admin/orders?status=PAID" },
     { count: pendingReviews, label: "دیدگاه در انتظار تأیید", href: "/admin/reviews" },

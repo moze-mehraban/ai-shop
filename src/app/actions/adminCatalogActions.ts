@@ -5,6 +5,7 @@ import { normalizeDigits, normalizeMobile } from "@/lib/digits";
 import { prisma } from "@/lib/prisma";
 import { SETTING_FIELDS, type SettingKey } from "@/lib/settings";
 import { sendSmsIrTemplate } from "@/lib/smsir";
+import { makeSlug, uniqueSlug } from "@/lib/slug";
 import { saveUploadedImage } from "@/lib/uploads";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -148,12 +149,15 @@ export async function saveProductAction(_prev: FormState, formData: FormData): P
 
   const id = text(formData, "id", 50) || null;
   const title = text(formData, "title", 200);
+  const requestedSlug = makeSlug(text(formData, "slug", 120) || text(formData, "title", 200));
   const description = text(formData, "description", 20000);
   const brand = text(formData, "brand", 80) || null;
   const categoryId = text(formData, "categoryId", 50);
   const aiSummary = text(formData, "aiSummary", 5000) || null;
   const price = num(formData, "price");
   const discountPercent = Math.trunc(num(formData, "discountPercent") ?? 0);
+  const discountEndsRaw = text(formData, "discountEndsAt", 40);
+  const discountEndsAt = discountEndsRaw ? new Date(discountEndsRaw) : null;
   let stock = Math.trunc(num(formData, "stock") ?? 0);
   const isActive = formData.get("isActive") === "on";
   let imageUrl = text(formData, "imageUrl", 1000) || null;
@@ -185,6 +189,10 @@ export async function saveProductAction(_prev: FormState, formData: FormData): P
   if (!categoryId) return fail("دسته‌بندی را انتخاب کنید.");
   if (price === null || !Number.isFinite(price) || price < 0) return fail("قیمت معتبر نیست.");
   if (discountPercent < 0 || discountPercent > 90) return fail("درصد تخفیف باید بین ۰ تا ۹۰ باشد.");
+  if (discountEndsAt && Number.isNaN(discountEndsAt.getTime())) return fail("زمان پایان تخفیف معتبر نیست.");
+  if (discountEndsAt && discountPercent > 0 && discountEndsAt.getTime() <= Date.now()) {
+    return fail("زمان پایان تخفیف باید در آینده باشد.");
+  }
   if (variants.some((variant) => variant.stock < 0 || (variant.price !== null && (!Number.isFinite(variant.price) || variant.price < 0)))) {
     return fail("قیمت یا موجودی یکی از تنوع‌ها معتبر نیست.");
   }
@@ -215,7 +223,14 @@ export async function saveProductAction(_prev: FormState, formData: FormData): P
     : null;
   if (id && !previous) return fail("محصول پیدا نشد.");
 
+  // آدرس خوانا یکتا (بدون در نظر گرفتن خود همین محصول)
+  const slug = await uniqueSlug(requestedSlug, async (candidate) => {
+    const owner = await prisma.product.findUnique({ where: { slug: candidate }, select: { id: true } });
+    return Boolean(owner && owner.id !== id);
+  });
+
   const data = {
+    slug,
     title,
     description,
     brand,
@@ -223,6 +238,7 @@ export async function saveProductAction(_prev: FormState, formData: FormData): P
     aiSummary,
     price,
     discountPercent,
+    discountEndsAt: discountPercent > 0 ? discountEndsAt : null,
     stock,
     isActive,
     specs: specs.length ? (specs as Prisma.InputJsonValue) : Prisma.DbNull,

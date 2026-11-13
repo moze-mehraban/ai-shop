@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { productHref } from "@/lib/slug";
 import type { MetadataRoute } from "next";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = getSiteUrl();
   const [products, categories] = await Promise.all([
-    prisma.product.findMany({ where: { isActive: true }, select: { id: true, updatedAt: true } }),
+    prisma.product.findMany({ where: { isActive: true }, select: { id: true, slug: true, updatedAt: true } }),
     prisma.category.findMany({ select: { slug: true } }),
   ]);
 
@@ -19,7 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     })),
     ...products.map((product) => ({
-      url: `${base}/product/${product.id}`,
+      url: `${base}${encodeURI(productHref(product))}`,
       lastModified: product.updatedAt,
       changeFrequency: "weekly" as const,
       priority: 0.7,

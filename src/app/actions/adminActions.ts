@@ -131,7 +131,7 @@ export async function generateProductSummaryAction(
 
     revalidatePath("/admin");
     revalidatePath("/admin/products");
-    revalidatePath(`/product/${product.id}`);
+    revalidatePath("/product/[id]", "page");
 
     return {
       status: "success",
@@ -221,8 +221,8 @@ export async function cancelOrderAction(formData: FormData) {
   revalidatePath("/admin/products");
   revalidatePath("/profile/orders");
 
-  for (const productId of restoredProductIds) {
-    revalidatePath(`/product/${productId}`);
+  if (restoredProductIds.length > 0) {
+    revalidatePath("/product/[id]", "page");
   }
 }
 
@@ -273,7 +273,7 @@ export async function deleteReviewAction(formData: FormData) {
   revalidatePath("/admin/reviews");
 
   if (productId) {
-    revalidatePath(`/product/${productId}`);
+    revalidatePath("/product/[id]", "page");
   }
 }
 
@@ -302,13 +302,12 @@ export async function setReviewApprovalAction(formData: FormData) {
   const reviewId = getRequiredText(formData, "reviewId");
   const approve = getRequiredText(formData, "approve") === "1";
 
-  const review = await prisma.review.update({
+  await prisma.review.update({
     where: { id: reviewId },
     data: { isApproved: approve },
-    select: { productId: true },
   });
 
   revalidatePath("/admin");
   revalidatePath("/admin/reviews");
-  revalidatePath(`/product/${review.productId}`);
+  revalidatePath("/product/[id]", "page");
 }

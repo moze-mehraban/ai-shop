@@ -71,7 +71,7 @@ export default function HeaderClient({
 
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl supports-[backdrop-filter]:bg-white/75">
+    <header className="print:hidden sticky top-0 z-50 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl supports-[backdrop-filter]:bg-white/75">
       {/* بخش بالای هدر: لوگو، جستجو و ورود/سبد خرید */}
       <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3 md:gap-8">
         <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label={`${shopName} صفحه اصلی`}>

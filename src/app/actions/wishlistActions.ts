@@ -54,7 +54,7 @@ export async function toggleWishlistAction(productId: string) {
     });
   }
 
-  revalidatePath(`/product/${productId}`);
+  revalidatePath("/product/[id]", "page");
   revalidatePath("/profile/wishlist");
 
   return {

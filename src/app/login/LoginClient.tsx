@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, KeyRound, Loader2, ShieldCheck, Smartphone, Sparkles, Truck } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, Smartphone, Sparkles, Truck } from 'lucide-react';
 import { requestOtpAction } from '@/app/actions/authActions';
 import { MOBILE_PATTERN, normalizeDigits, normalizeMobile } from '@/lib/digits';
 
@@ -17,6 +17,9 @@ export default function LoginClient({
 }) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
+  const [method, setMethod] = useState<'otp' | 'password'>('otp');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [mobile, setMobile] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '']);
   const [error, setError] = useState('');
@@ -91,6 +94,48 @@ export default function LoginClient({
     }
   };
 
+  // بعد از ورود موفق: بازگشت به صفحه‌ای که کاربر از آن آمده بود
+  const finishLogin = () => {
+    const requestedCallback = new URLSearchParams(window.location.search).get('callbackUrl');
+    const callbackUrl =
+      requestedCallback?.startsWith('/') && !requestedCallback.startsWith('//') ? requestedCallback : '/profile';
+    router.push(callbackUrl);
+    router.refresh();
+  };
+
+  // ورود با شماره موبایل و رمز عبور
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const normalizedMobile = normalizeMobile(mobile);
+    if (!MOBILE_PATTERN.test(normalizedMobile)) {
+      setError('لطفاً شماره موبایل معتبر وارد کنید (مثال: 09123456789)');
+      return;
+    }
+    if (!password) {
+      setError('رمز عبور را وارد کنید.');
+      return;
+    }
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    setLoading(true);
+    try {
+      const res = await signIn('password', { mobile: normalizedMobile, password, redirect: false });
+      if (res?.error) {
+        // پیام خطا از سرور (رمز اشتباه یا قفل موقت)؛ برای خطاهای ناشناخته پیام عمومی
+        setError(res.error.length > 20 ? res.error : 'شماره موبایل یا رمز عبور اشتباه است.');
+        setLoading(false);
+      } else {
+        finishLogin();
+      }
+    } catch {
+      setError('خطا در برقراری ارتباط با سرور.');
+      setLoading(false);
+    } finally {
+      sendingRef.current = false;
+    }
+  };
+
   // تایید نهایی کد و لاگین
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,14 +160,7 @@ export default function LoginClient({
         setError('کد تایید اشتباه یا منقضی شده است.');
         setLoading(false);
       } else {
-        const requestedCallback = new URLSearchParams(window.location.search).get('callbackUrl');
-        const callbackUrl =
-          requestedCallback?.startsWith('/') && !requestedCallback.startsWith('//')
-            ? requestedCallback
-            : '/profile';
-
-        router.push(callbackUrl);
-        router.refresh();
+        finishLogin();
       }
     } catch {
       setError('خطا در برقراری ارتباط با سرور.');
@@ -201,14 +239,16 @@ export default function LoginClient({
             {/* هدر فرم */}
             <div className="space-y-2">
               <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                {step === 1 ? <Smartphone className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
+                {step === 1 && method === 'otp' ? <Smartphone className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
               </span>
               <h1 className="text-xl font-black text-ink">
-                {step === 1 ? 'ورود | ثبت‌نام' : 'کد تایید را وارد کنید'}
+                {step === 2 ? 'کد تایید را وارد کنید' : method === 'password' ? 'ورود با رمز عبور' : 'ورود | ثبت‌نام'}
               </h1>
               <p className="text-sm leading-7 text-slate-500">
                 {step === 1 ? (
-                  'شماره موبایل خود را برای ورود وارد کنید'
+                  method === 'password'
+                    ? 'شماره موبایل و رمز عبوری را که در پروفایل تنظیم کرده‌اید وارد کنید'
+                    : 'شماره موبایل خود را برای ورود وارد کنید'
                 ) : (
                   <>
                     کد ۵ رقمی ارسال‌شده به شماره{' '}
@@ -218,8 +258,93 @@ export default function LoginClient({
               </p>
             </div>
 
-            {/* فرم مرحله اول: شماره موبایل */}
-            {step === 1 ? (
+            {/* انتخاب روش ورود */}
+            {step === 1 && (
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="روش ورود">
+                {([
+                  ['otp', 'کد پیامکی'],
+                  ['password', 'رمز عبور'],
+                ] as const).map(([value, title]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={method === value}
+                    onClick={() => {
+                      setMethod(value);
+                      setError('');
+                    }}
+                    className={`rounded-lg py-2 text-sm font-bold transition ${
+                      method === value ? 'bg-white text-ink shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {title}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {step === 1 && method === 'password' ? (
+              <form onSubmit={handlePasswordSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <label htmlFor="mobile-password" className="block text-xs font-bold text-slate-700">شماره موبایل</label>
+                  <input
+                    id="mobile-password"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="username"
+                    placeholder="09123456789"
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value)}
+                    dir="ltr"
+                    className="field py-3.5 text-right text-base tracking-wider"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="password" className="block text-xs font-bold text-slate-700">رمز عبور</label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      dir="ltr"
+                      className="field py-3.5 pl-11 text-right text-base"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((current) => !current)}
+                      aria-label={showPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                      className="absolute top-1/2 left-3 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <p className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-center text-xs font-bold leading-6 text-rose-700">
+                    {error}
+                  </p>
+                )}
+
+                <button type="submit" disabled={loading} className="btn-primary w-full py-3.5">
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {loading ? 'در حال ورود...' : 'ورود'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMethod('otp');
+                    setError('');
+                  }}
+                  className="w-full text-center text-xs font-bold text-slate-500 hover:text-brand-700"
+                >
+                  رمز را فراموش کرده‌ام؛ ورود با کد پیامکی
+                </button>
+              </form>
+            ) : step === 1 ? (
               <form onSubmit={handleMobileSubmit} className="space-y-5">
                 <div className="space-y-2">
                   <label htmlFor="mobile" className="block text-xs font-bold text-slate-700">

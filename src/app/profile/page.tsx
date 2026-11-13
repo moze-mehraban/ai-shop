@@ -10,6 +10,8 @@ import {
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { isRecentOtpLogin } from "@/lib/password";
+import PasswordForm from "./PasswordForm";
 import ProfileForm from "./ProfileForm";
 
 export const revalidate = 0;
@@ -80,6 +82,8 @@ export default async function ProfilePage() {
               <AccountMetric icon={<Heart className="h-5 w-5" />} value={user._count.wishlist} label="علاقه‌مندی" />
               <AccountMetric icon={<MessageSquareText className="h-5 w-5" />} value={user._count.reviews} label="دیدگاه" />
             </div>
+
+            <PasswordForm hasPassword={Boolean(user.password)} canSkipCurrent={isRecentOtpLogin(session)} />
 
             <div className="card rounded-3xl p-6">
               <h2 className="font-black text-ink">دسترسی سریع</h2>

@@ -36,7 +36,7 @@ export default function ProfileNavigation() {
   const pathname = usePathname();
 
   return (
-    <nav className="border-b border-slate-200 bg-white">
+    <nav className="print:hidden border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-[1200px] gap-2 overflow-x-auto overflow-y-hidden no-scrollbar px-4 py-3">
         {profileLinks.map((link) => {
           const isActive =

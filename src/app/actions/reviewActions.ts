@@ -100,7 +100,7 @@ export async function addReviewAction(
     },
   });
 
-  revalidatePath(`/product/${productId}`);
+  revalidatePath("/product/[id]", "page");
 
   return {
     status: "success",

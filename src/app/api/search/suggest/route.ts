@@ -1,6 +1,7 @@
 import { getCategoryTree } from "@/lib/categories";
 import { getDiscountedPrice } from "@/lib/pricing";
 import { prisma } from "@/lib/prisma";
+import { productHref } from "@/lib/slug";
 import { normalizeSearchText, searchProducts } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
   const products = topIds.length
     ? await prisma.product.findMany({
         where: { id: { in: topIds } },
-        select: { id: true, title: true, imageUrl: true, price: true, discountPercent: true, stock: true },
+        select: { id: true, slug: true, title: true, imageUrl: true, price: true, discountPercent: true, stock: true },
       })
     : [];
 
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
       .sort((a, b) => topIds.indexOf(a.id) - topIds.indexOf(b.id))
       .map((product) => ({
         id: product.id,
+        href: productHref(product),
         title: product.title,
         imageUrl: product.imageUrl,
         price: getDiscountedPrice(product.price, product.discountPercent),

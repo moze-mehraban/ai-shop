@@ -1,11 +1,13 @@
 /* eslint-disable @next/next/no-img-element */
 import { getDiscountedPrice } from "@/lib/pricing";
 import { Percent, Star } from "lucide-react";
+import { productHref } from "@/lib/slug";
 import Link from "next/link";
 
 type ProductCardProps = {
   product: {
     id: string;
+    slug?: string | null;
     title: string;
     price: number;
     discountPercent: number;
@@ -33,7 +35,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   return (
     <Link
-      href={`/product/${product.id}`}
+      href={productHref(product)}
       className="group flex flex-col overflow-hidden rounded-[var(--radius-card)] border border-slate-200/70 bg-white shadow-[var(--shadow-card)] transition duration-300 hover:-translate-y-1 hover:border-slate-200 hover:shadow-[var(--shadow-card-hover)]"
     >
       <div className="relative aspect-square overflow-hidden bg-gradient-to-b from-slate-50 to-white">

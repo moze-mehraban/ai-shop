@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { productHref } from "@/lib/slug";
 import Link from "next/link";
 import { Heart, ArrowRight } from "lucide-react";
 import WishlistButton from "@/components/WishlistButton";
@@ -106,7 +107,7 @@ export default async function WishlistPage() {
 
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                     <Link
-                      href={`/product/${product.id}`}
+                      href={productHref(product)}
                       className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors text-center"
                     >
                       مشاهده کالا

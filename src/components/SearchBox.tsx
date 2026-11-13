@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
 type Suggestion = {
-  products: { id: string; title: string; imageUrl: string | null; price: number; inStock: boolean }[];
+  products: { id: string; href: string; title: string; imageUrl: string | null; price: number; inStock: boolean }[];
   categories: { name: string; slug: string }[];
   total: number;
   approximate: boolean;
@@ -71,7 +71,7 @@ export default function SearchBox({
   const data = isFresh ? result.data : EMPTY;
   const links = [
     ...data.categories.map((category) => `/category/${category.slug}`),
-    ...data.products.map((product) => `/product/${product.id}`),
+    ...data.products.map((product) => product.href),
   ];
 
   const go = (href: string) => {
@@ -161,7 +161,7 @@ export default function SearchBox({
             return (
               <Link
                 key={product.id}
-                href={`/product/${product.id}`}
+                href={product.href}
                 onClick={() => setOpen(false)}
                 role="option"
                 aria-selected={isActive}

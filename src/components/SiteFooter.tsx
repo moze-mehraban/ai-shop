@@ -45,7 +45,7 @@ export default async function SiteFooter() {
   const year = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { year: "numeric" }).format(new Date());
 
   return (
-    <footer className="mt-16 border-t border-slate-200/70 bg-white">
+    <footer className="print:hidden mt-16 border-t border-slate-200/70 bg-white">
       <div className="mx-auto max-w-[1400px] px-4">
         <div className="grid grid-cols-2 gap-4 border-b border-slate-100 py-8 md:grid-cols-4">
           {perks.map(({ Icon, title, text }) => (

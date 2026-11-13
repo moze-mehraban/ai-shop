@@ -1,4 +1,5 @@
 import { advanceOrderStatusAction, cancelOrderAction, updateOrderInfoAction } from "@/app/actions/adminActions";
+import { rejectReceiptAction } from "@/app/actions/receiptActions";
 import AdminSubmitButton from "@/components/admin/AdminSubmitButton";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES, RETURN_STATUS_LABELS, RETURN_STATUS_STYLES } from "@/lib/checkout";
 import { getPaymentDeadlineHours, paymentDeadline } from "@/lib/orders";
@@ -30,7 +31,8 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
 
   if (!order) notFound();
   const code = order.id.slice(-8).toUpperCase();
-  const payBy = order.status === "PENDING" ? paymentDeadline(order.createdAt, deadlineHours) : null;
+  const payBy =
+    order.status === "PENDING" && !order.receiptUploadedAt ? paymentDeadline(order.createdAt, deadlineHours) : null;
 
   return (
     <div className="space-y-6">
@@ -127,6 +129,36 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
         </div>
 
         <aside className="space-y-6">
+          {order.receiptPath && (
+            <section className="card space-y-3 rounded-2xl p-5">
+              <h2 className="font-black text-ink">رسید کارت‌به‌کارت</h2>
+              <a href={`/api/receipts/${order.id}`} target="_blank" className="block overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/receipts/${order.id}`} alt="رسید پرداخت" className="max-h-80 w-full object-contain" />
+              </a>
+              <p className="text-xs leading-6 text-slate-600">
+                ارسال: {order.receiptUploadedAt?.toLocaleString("fa-IR", { dateStyle: "medium", timeStyle: "short" })}
+                {order.receiptRef && <> · شماره پیگیری: <span dir="ltr" className="font-mono">{order.receiptRef}</span></>}
+                <br />
+                مبلغ سفارش: <strong>{order.totalAmount.toLocaleString("fa-IR")} تومان</strong>
+              </p>
+              {order.receiptRejectNote ? (
+                <p className="rounded-xl bg-rose-50 p-2 text-xs text-rose-700">رد شده: {order.receiptRejectNote} (منتظر رسید جدید)</p>
+              ) : (
+                order.status === "PENDING" && (
+                  <form action={rejectReceiptAction} className="space-y-2 border-t border-slate-100 pt-3">
+                    <input type="hidden" name="orderId" value={order.id} />
+                    <input name="note" placeholder="دلیل رد رسید (به مشتری نمایش داده می‌شود)" className="field py-2 text-xs" />
+                    <AdminSubmitButton className="btn-ghost w-full py-2 text-xs text-rose-600" pendingLabel="در حال ثبت...">
+                      رد رسید
+                    </AdminSubmitButton>
+                    <p className="text-[11px] text-slate-400">اگر رسید درست است، «تأیید پرداخت» را بزنید.</p>
+                  </form>
+                )
+              )}
+            </section>
+          )}
+
           <section className="card space-y-3 rounded-2xl p-5">
             <h2 className="font-black text-ink">تغییر وضعیت</h2>
             {NEXT_ACTION[order.status] && (

@@ -7,6 +7,8 @@ declare module "next-auth" {
       id: string;
       role: Role;
     } & DefaultSession["user"];
+    authMethod?: "otp" | "password";
+    authAt?: number;
   }
 
   interface User {
@@ -17,5 +19,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     role?: Role;
+    authMethod?: "otp" | "password";
+    authAt?: number;
   }
 }

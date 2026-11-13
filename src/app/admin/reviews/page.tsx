@@ -8,6 +8,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
+import { productHref } from "@/lib/slug";
 import Link from "next/link";
 
 export const revalidate = 0;
@@ -27,6 +28,7 @@ export default async function AdminReviewsPage({
         product: {
           select: {
             id: true,
+            slug: true,
             title: true,
           },
         },
@@ -135,7 +137,7 @@ export default async function AdminReviewsPage({
                   )}
                 </div>
                 <Link
-                  href={`/product/${review.product.id}`}
+                  href={productHref(review.product)}
                   className="mt-1 block truncate text-xs font-bold text-brand-700 hover:text-brand-700"
                 >
                   {review.product.title}

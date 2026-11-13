@@ -1,5 +1,6 @@
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/checkout";
 import { normalizeDigits } from "@/lib/digits";
+import { expireUnpaidOrders } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
 import type { OrderStatus, Prisma } from "@prisma/client";
 import { Search } from "lucide-react";
@@ -15,6 +16,7 @@ export default async function AdminOrdersPage({
 }: {
   searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
+  await expireUnpaidOrders();
   const params = await searchParams;
   const status = STATUSES.includes(params.status as OrderStatus) ? (params.status as OrderStatus) : undefined;
   const q = normalizeDigits(String(params.q ?? "")).trim().slice(0, 60);

@@ -1,8 +1,10 @@
 import { authOptions } from "@/lib/auth";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/checkout";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES, RETURN_STATUS_LABELS, RETURN_STATUS_STYLES } from "@/lib/checkout";
+import { getPaymentDeadlineHours, getReturnWindowDays, isInFuture, paymentDeadline } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
 import { getSettings } from "@/lib/settings";
-import { ArrowRight, Check, CheckCircle2, MapPin, Truck } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, Clock, MapPin, PackageOpen, Truck, XCircle } from "lucide-react";
+import ReturnRequestForm from "./ReturnRequestForm";
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -23,20 +25,51 @@ export default async function OrderDetailPage({
     redirect(`/login?callbackUrl=${encodeURIComponent(`/profile/orders/${id}`)}`);
   }
 
-  const [order, settings] = await Promise.all([
+  const [order, settings, deadlineHours, returnDays] = await Promise.all([
     prisma.order.findFirst({
       where: { id, userId: session.user.id },
       include: {
-        items: { include: { product: { select: { id: true, title: true, imageUrl: true } } } },
+        items: {
+          include: {
+            product: { select: { id: true, title: true, imageUrl: true } },
+            returnItems: { where: { request: { status: { not: "REJECTED" } } }, select: { quantity: true } },
+          },
+        },
+        returns: {
+          orderBy: { createdAt: "desc" },
+          include: { items: { include: { orderItem: { select: { title: true, variantName: true } } } } },
+        },
       },
     }),
     getSettings(),
+    getPaymentDeadlineHours(),
+    getReturnWindowDays(),
   ]);
 
   if (!order) notFound();
 
   const stepIndex = STEPS.indexOf(order.status as (typeof STEPS)[number]);
   const code = order.id.slice(-8).toUpperCase();
+  const formatDateTime = (date: Date) => date.toLocaleString("fa-IR", { dateStyle: "long", timeStyle: "short" });
+
+  // مهلت پرداخت (برای سفارش در انتظار پرداخت)
+  const payBy = order.status === "PENDING" ? paymentDeadline(order.createdAt, deadlineHours) : null;
+
+  // مهلت مرجوعی (برای سفارش تحویل‌شده)
+  const deliveredAt = order.deliveredAt ?? (order.status === "DELIVERED" ? order.updatedAt : null);
+  const returnUntil =
+    order.status === "DELIVERED" && deliveredAt && returnDays > 0
+      ? new Date(deliveredAt.getTime() + returnDays * 24 * 60 * 60 * 1000)
+      : null;
+  const returnableItems = order.items.map((item) => ({
+    id: item.id,
+    title: item.title ?? item.product.title,
+    variantName: item.variantName,
+    imageUrl: item.product.imageUrl,
+    returnable: Math.max(0, item.quantity - item.returnItems.reduce((sum, returned) => sum + returned.quantity, 0)),
+  }));
+  const canRequestReturn =
+    returnUntil !== null && isInFuture(returnUntil) && returnableItems.some((item) => item.returnable > 0);
 
   return (
     <main className="mx-auto max-w-4xl space-y-5 px-4 py-8">
@@ -90,6 +123,26 @@ export default async function OrderDetailPage({
               </li>
             ))}
           </ol>
+        )}
+
+        {payBy && (
+          <p className="mt-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-7 text-amber-800">
+            <Clock className="mt-1 h-4 w-4 shrink-0" />
+            <span>
+              مهلت پرداخت این سفارش تا <strong>{formatDateTime(payBy)}</strong> است. اگر تا آن زمان پرداخت انجام نشود، سفارش خودکار لغو
+              می‌شود.
+            </span>
+          </p>
+        )}
+
+        {order.status === "CANCELED" && (
+          <p className="mt-5 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-7 text-slate-600">
+            <XCircle className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
+            <span>
+              این سفارش {order.canceledAt ? `در ${formatDateTime(order.canceledAt)} ` : ""}لغو شد.
+              {order.cancelReason && <> دلیل: {order.cancelReason}</>}
+            </span>
+          </p>
         )}
 
         {order.trackingCode && (
@@ -147,6 +200,52 @@ export default async function OrderDetailPage({
           </div>
         </dl>
       </section>
+
+      {(order.returns.length > 0 || canRequestReturn) && (
+        <section id="returns" className="card scroll-mt-32 rounded-2xl p-5 md:p-6">
+          <h2 className="mb-4 flex items-center gap-2 font-black text-ink">
+            <PackageOpen className="h-5 w-5 text-brand-600" />
+            مرجوعی
+          </h2>
+
+          {order.returns.length > 0 && (
+            <ul className="mb-5 space-y-3">
+              {order.returns.map((request) => (
+                <li key={request.id} className="rounded-xl border border-slate-200 p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-slate-500">ثبت‌شده در {request.createdAt.toLocaleDateString("fa-IR", { dateStyle: "long" })}</span>
+                    <span className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${RETURN_STATUS_STYLES[request.status]}`}>
+                      {RETURN_STATUS_LABELS[request.status]}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-slate-700">
+                    {request.items
+                      .map((item) => `${item.orderItem.title ?? "کالا"}${item.orderItem.variantName ? ` (${item.orderItem.variantName})` : ""} × ${item.quantity.toLocaleString("fa-IR")}`)
+                      .join("، ")}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">دلیل: {request.reason}{request.description ? ` — ${request.description}` : ""}</p>
+                  {request.adminNote && (
+                    <p className="mt-2 rounded-lg bg-slate-50 p-2 text-xs leading-6 text-slate-600">پاسخ فروشگاه: {request.adminNote}</p>
+                  )}
+                  {request.status === "REFUNDED" && request.refundAmount !== null && (
+                    <p className="mt-2 text-xs font-bold text-emerald-700">
+                      مبلغ بازگشتی: {request.refundAmount.toLocaleString("fa-IR")} تومان
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {canRequestReturn && returnUntil && (
+            <ReturnRequestForm
+              orderId={order.id}
+              items={returnableItems}
+              deadlineLabel={returnUntil.toLocaleDateString("fa-IR", { dateStyle: "long" })}
+            />
+          )}
+        </section>
+      )}
 
       {order.address && (
         <section className="card rounded-2xl p-5 md:p-6">

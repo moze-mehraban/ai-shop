@@ -82,7 +82,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     id: "demo_p_galaxy_s24fe", category: "mobile", title: "گوشی موبایل سامسونگ مدل Galaxy S24 FE", brand: "Samsung",
     price: 38500000, discountPercent: 8, icon: "smartphone", colors: ["#6366f1", "#e5e7eb"],
     description: phoneDesc("گلکسی S24 FE", "امکانات هوش مصنوعی Galaxy AI، دوربین سه‌گانه با زوم اپتیکال ۳ برابر و طراحی مقاوم، تجربه پرچمدار را با قیمتی منطقی‌تر ارائه می‌دهد."),
-    specs: [["صفحه‌نمایش", "۶.۷ اینچ Dynamic AMOLED 2X"], ["پردازنده", "Exynos 2400e"], ["حافظه داخلی", "۲۵۶ گیگابایت"], ["رم", "۸ گیگابایت"], ["دوربین", "۵۰ + ۱۲ + ۸ مگاپیکسل"], ["باتری", "۴۷۰۰ میلی‌آمپر ساعت"]],
+    specs: [["صفحه‌نمایش", "۶.۷ اینچ Dynamic AMOLED 2X"], ["پردازنده", "Exynos 2400e"], ["حافظه داخلی", "۲۵۶ گیگابایت"], ["رم", "۸ گیگابایت"], ["دوربین اصلی", "۵۰ + ۱۲ + ۸ مگاپیکسل"], ["باتری", "۴۷۰۰ میلی‌آمپر ساعت"]],
     variants: [{ name: "آبی - ۲۵۶ گیگ", stock: 4 }, { name: "خاکستری - ۲۵۶ گیگ", stock: 2 }],
   },
 
@@ -97,7 +97,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     id: "demo_p_xiaomi_pad6", category: "demo_cat_tablet", title: "تبلت شیائومی مدل Pad 6", brand: "Xiaomi",
     price: 22800000, discountPercent: 5, icon: "tablet", colors: ["#94a3b8", "#1e3a8a"],
     description: "پد ۶ شیائومی با صفحه‌نمایش ۱۴۴ هرتز 2.8K و پردازنده اسنپدراگون ۸۷۰، برای طراحی، بازی و چندوظیفگی گزینه‌ای قدرتمند است.",
-    specs: [["صفحه‌نمایش", "۱۱ اینچ 2.8K، ۱۴۴ هرتز"], ["پردازنده", "Snapdragon 870"], ["رم", "۸ گیگابایت"], ["باتری", "۸۸۴۰ میلی‌آمپر ساعت، شارژ ۳۳ وات"]],
+    specs: [["صفحه‌نمایش", "۱۱ اینچ 2.8K، ۱۴۴ هرتز"], ["پردازنده", "Snapdragon 870"], ["حافظه داخلی", "۲۵۶ گیگابایت"], ["رم", "۸ گیگابایت"], ["باتری", "۸۸۴۰ میلی‌آمپر ساعت، شارژ ۳۳ وات"]],
     variants: [{ name: "خاکستری - ۲۵۶ گیگ", stock: 3 }, { name: "آبی - ۲۵۶ گیگ", stock: 2 }],
   },
 
@@ -132,7 +132,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     id: "demo_p_watch6", category: "demo_cat_wearable", title: "ساعت هوشمند سامسونگ مدل Galaxy Watch6 40mm", brand: "Samsung",
     price: 12900000, icon: "watch", colors: ["#0f172a", "#fde68a"],
     description: "ساعت هوشمند گلکسی واچ ۶ با سنسور سلامت پیشرفته، صفحه‌نمایش بزرگ‌تر و پشتیبانی از پرداخت و اعلان‌های گوشی.",
-    specs: [["اندازه", "۴۰ میلی‌متر"], ["صفحه‌نمایش", "Super AMOLED"], ["ضدآب", "5ATM و IP68"], ["سازگاری", "اندروید"]],
+    specs: [["اندازه", "۴۰ میلی‌متر"], ["صفحه‌نمایش", "Super AMOLED"], ["ضدآب", "5ATM"], ["سازگاری", "اندروید"], ["باتری", "تا ۴۰ ساعت"]],
     variants: [{ name: "گرافیتی", stock: 3 }, { name: "طلایی", stock: 2 }],
   },
 
@@ -243,6 +243,30 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     variants: [{ name: "مشکی", stock: 7 }, { name: "سفید", stock: 4 }],
   },
 ];
+
+// مشخصات «کلیدی» هر دسته (حداکثر ۴)؛ همین‌ها در صفحه محصول و فیلترها استفاده می‌شوند
+export const DEMO_KEY_SPECS: Record<string, string[]> = {
+  mobile: ["حافظه داخلی", "رم", "دوربین اصلی", "باتری"],
+  demo_cat_tablet: ["صفحه‌نمایش", "حافظه داخلی", "رم", "باتری"],
+  demo_cat_laptop: ["پردازنده", "رم", "حافظه", "صفحه‌نمایش"],
+  demo_cat_wearable: ["صفحه‌نمایش", "ضدآب", "سازگاری", "باتری"],
+  demo_cat_audio: ["نوع", "حذف نویز", "باتری"],
+  demo_cat_charger: ["توان", "خروجی"],
+  demo_cat_powerbank: ["ظرفیت", "توان خروجی"],
+  demo_cat_case: ["سازگاری", "جنس"],
+  demo_cat_speaker: ["توان", "ضدآب", "باتری"],
+  demo_cat_input: ["اتصال", "دقت"],
+};
+
+export function toSpecRows(category: string, specs: [string, string][]) {
+  const keys = DEMO_KEY_SPECS[category] ?? [];
+  let keyCount = 0;
+  return specs.map(([label, value]) => {
+    const key = keys.includes(label) && keyCount < 4;
+    if (key) keyCount += 1;
+    return key ? { label, value, key: true } : { label, value };
+  });
+}
 
 export const DEMO_USERS = [
   { id: "demo_user_1", name: "سارا احمدی" },

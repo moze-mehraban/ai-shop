@@ -79,3 +79,29 @@ export const ORDER_STATUS_STYLES = {
 export function formatToman(value: number) {
   return `${Math.round(value).toLocaleString("fa-IR")} تومان`;
 }
+
+// ---------------- مرجوعی ----------------
+export const RETURN_STATUS_LABELS = {
+  REQUESTED: "در انتظار بررسی",
+  APPROVED: "تأیید شد؛ کالا را ارسال کنید",
+  REJECTED: "رد شد",
+  RECEIVED: "کالا دریافت شد",
+  REFUNDED: "مبلغ بازگردانده شد",
+} as const;
+
+export const RETURN_STATUS_STYLES = {
+  REQUESTED: "bg-amber-50 text-amber-700 border-amber-200",
+  APPROVED: "bg-sky-50 text-sky-700 border-sky-200",
+  REJECTED: "bg-rose-50 text-rose-700 border-rose-200",
+  RECEIVED: "bg-ai-50 text-ai-700 border-ai-100",
+  REFUNDED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+} as const;
+
+export const RETURN_REASONS = [
+  "آسیب‌دیدگی کالا هنگام ارسال",
+  "ایراد فنی یا خرابی",
+  "مغایرت کالا با سفارش (رنگ، مدل، مشخصات)",
+  "کسری یا ناقص بودن اقلام",
+  "انصراف از خرید",
+  "سایر",
+] as const;

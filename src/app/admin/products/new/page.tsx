@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getEditorOptions } from "../editorData";
 
 export default async function NewProductPage() {
-  const { categories, brands } = await getEditorOptions();
+  const { categories, brands, specSuggestions } = await getEditorOptions();
 
   return (
     <div className="space-y-6">
@@ -18,7 +18,7 @@ export default async function NewProductPage() {
           ابتدا از بخش <Link href="/admin/categories" className="font-bold text-brand-700">دسته‌بندی‌ها</Link> یک دسته بسازید.
         </p>
       ) : (
-        <ProductEditor categories={categories} brands={brands} />
+        <ProductEditor categories={categories} brands={brands} specSuggestions={specSuggestions} />
       )}
     </div>
   );

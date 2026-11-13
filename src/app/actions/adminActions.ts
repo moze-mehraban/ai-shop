@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { summarizeReviewsWithOpenRouter } from "@/lib/openrouter";
 import { ORDER_STATUS_LABELS } from "@/lib/checkout";
 import { sendSmsIrTemplate } from "@/lib/smsir";
+import { cancelOrder } from "@/lib/orders";
 
 // پیامک تغییر وضعیت سفارش به مشتری (در صورت تنظیم SMSIR_STATUS_TEMPLATE_ID)
 async function notifyOrderStatus(orderId: string) {
@@ -45,7 +46,6 @@ const nextOrderStatus: Partial<Record<OrderStatus, OrderStatus>> = {
   SHIPPED: "DELIVERED",
 };
 
-const cancelableOrderStatuses: OrderStatus[] = ["PENDING", "PAID"];
 
 const roles: Role[] = ["USER", "ADMIN"];
 
@@ -183,7 +183,10 @@ export async function advanceOrderStatusAction(formData: FormData) {
       id: orderId,
       status: order.status,
     },
-    data: { status: nextStatus },
+    data: {
+      status: nextStatus,
+      ...(nextStatus === "DELIVERED" ? { deliveredAt: new Date() } : {}),
+    },
   });
 
   if (updated.count === 1) {
@@ -199,89 +202,22 @@ export async function cancelOrderAction(formData: FormData) {
   await requireAdmin("/admin/orders");
 
   const orderId = getRequiredText(formData, "orderId");
+  const reason = getRequiredText(formData, "reason").slice(0, 300) || "لغو توسط فروشگاه";
 
   if (!orderId) {
     return;
   }
 
-  const restoredProductIds = await prisma.$transaction(
-    async (transaction) => {
-      const order = await transaction.order.findUnique({
-        where: { id: orderId },
-        select: {
-          status: true,
-          couponCode: true,
-          items: {
-            select: {
-              productId: true,
-              variantId: true,
-              quantity: true,
-            },
-          },
-        },
-      });
+  const restoredProductIds = await cancelOrder(orderId, reason);
 
-      if (!order || !cancelableOrderStatuses.includes(order.status)) {
-        return [];
-      }
-
-      const cancellation = await transaction.order.updateMany({
-        where: {
-          id: orderId,
-          status: {
-            in: cancelableOrderStatuses,
-          },
-        },
-        data: { status: "CANCELED" },
-      });
-
-      if (cancellation.count !== 1) {
-        return [];
-      }
-
-      const quantitiesByProduct = new Map<string, number>();
-
-      for (const item of order.items) {
-        quantitiesByProduct.set(
-          item.productId,
-          (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity,
-        );
-      }
-
-      if (order.couponCode) {
-        await transaction.coupon.updateMany({
-          where: { code: order.couponCode, usedCount: { gt: 0 } },
-          data: { usedCount: { decrement: 1 } },
-        });
-      }
-
-      for (const item of order.items) {
-        if (item.variantId) {
-          await transaction.productVariant.updateMany({
-            where: { id: item.variantId },
-            data: { stock: { increment: item.quantity } },
-          });
-        }
-      }
-
-      for (const [productId, quantity] of quantitiesByProduct) {
-        await transaction.product.update({
-          where: { id: productId },
-          data: {
-            stock: {
-              increment: quantity,
-            },
-          },
-        });
-      }
-
-      return [...quantitiesByProduct.keys()];
-    },
-  );
+  if (restoredProductIds.length > 0) {
+    await notifyOrderStatus(orderId);
+  }
 
   revalidatePath("/");
   revalidatePath("/admin");
   revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/admin/products");
   revalidatePath("/profile/orders");
 

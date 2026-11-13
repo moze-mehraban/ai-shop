@@ -1,3 +1,4 @@
+import { expireUnpaidOrders } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
 import {
   AlertTriangle,
@@ -23,6 +24,7 @@ const orderStatusLabels = {
 } as const;
 
 export default async function AdminDashboardPage() {
+  await expireUnpaidOrders();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -42,6 +44,7 @@ export default async function AdminDashboardPage() {
     paidOrders,
     pendingReviews,
     waitingRestock,
+    pendingReturns,
   ] = await Promise.all([
     prisma.product.count(),
     prisma.user.count(),
@@ -110,12 +113,14 @@ export default async function AdminDashboardPage() {
     prisma.order.count({ where: { status: "PAID" } }),
     prisma.review.count({ where: { isApproved: false } }),
     prisma.stockNotification.count({ where: { notifiedAt: null } }),
+    prisma.returnRequest.count({ where: { status: { in: ["REQUESTED", "RECEIVED"] } } }),
   ]);
 
   const todos = [
     { count: pendingOrders, label: "سفارش در انتظار پرداخت", href: "/admin/orders?status=PENDING" },
     { count: paidOrders, label: "سفارش آماده ارسال", href: "/admin/orders?status=PAID" },
     { count: pendingReviews, label: "دیدگاه در انتظار تأیید", href: "/admin/reviews" },
+    { count: pendingReturns, label: "مرجوعی نیازمند اقدام", href: "/admin/returns" },
     { count: waitingRestock, label: "درخواست «موجود شد خبرم کن»", href: "/admin/products?status=out" },
   ].filter((todo) => todo.count > 0);
 

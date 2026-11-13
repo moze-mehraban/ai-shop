@@ -10,6 +10,7 @@ import {
 } from "@/lib/catalogShared";
 import { normalizeDigits } from "@/lib/digits";
 import { getCategoryTree, getDescendantIds } from "@/lib/categories";
+import { expireUnpaidOrders } from "@/lib/orders";
 import { getDiscountedPrice } from "@/lib/pricing";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
@@ -84,13 +85,32 @@ type Row = {
   rating: number; // میانگین امتیاز (۰ = بدون امتیاز)
   sales: number;
   createdAt: number;
-  specs: Map<string, string>;
+  // کلید = عنوان یکسان‌شده؛ مقدار نمایشی و مقدار یکسان‌شده برای مقایسه
+  specs: Map<string, { label: string; value: string; valueKey: string }>;
+  keyLabels: Set<string>; // مشخصاتی که مدیر «کلیدی» علامت زده
+};
+
+// یکسان‌سازی نوشتار مشخصات تا «۸ گیگابایت»، «8 گیگابایت» و «8  گیگ‌ابایت» یکی حساب شوند
+export function normalizeSpec(value: string) {
+  return normalizeDigits(value)
+    .toLowerCase()
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/[\u200c\u200f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type MatchContext = {
+  inCategory: Set<string> | null;
+  specFilter: Map<string, Set<string>>; // عنوان یکسان‌شده ← مقادیر یکسان‌شده
 };
 
 // هر فیلتر به‌جز خودش اعمال می‌شود تا شمارنده‌ها «اگر این را هم انتخاب کنید» را نشان دهند
 type FilterKey = "brand" | "category" | "price" | "stock" | "discount" | "rating" | `spec:${string}`;
 
-function matches(row: Row, parsed: ParsedCatalogParams, skip?: FilterKey, inCategory?: Set<string> | null) {
+function matches(row: Row, parsed: ParsedCatalogParams, skip: FilterKey | undefined, context: MatchContext) {
+  const { inCategory, specFilter } = context;
   if (skip !== "brand" && parsed.brands.length && !(row.brand && parsed.brands.includes(row.brand))) return false;
   if (skip !== "category" && inCategory && !inCategory.has(row.categoryId)) return false;
   if (skip !== "price") {
@@ -100,10 +120,10 @@ function matches(row: Row, parsed: ParsedCatalogParams, skip?: FilterKey, inCate
   if (skip !== "stock" && parsed.inStock && row.stock <= 0) return false;
   if (skip !== "discount" && parsed.discount && row.discountPercent <= 0) return false;
   if (skip !== "rating" && parsed.rating !== null && row.rating < parsed.rating) return false;
-  for (const [label, values] of parsed.specs) {
-    if (skip === `spec:${label}`) continue;
-    const value = row.specs.get(label);
-    if (!value || !values.has(value)) return false;
+  for (const [labelKey, valueKeys] of specFilter) {
+    if (skip === `spec:${labelKey}`) continue;
+    const spec = row.specs.get(labelKey);
+    if (!spec || !valueKeys.has(spec.valueKey)) return false;
   }
   return true;
 }
@@ -141,6 +161,7 @@ export async function queryCatalog(
   rankedIds?: string[],
   rootCategoryId?: string, // در صفحه دسته: ناوبری از زیرمجموعه‌های همین دسته شروع می‌شود
 ) {
+  await expireUnpaidOrders();
   const { roots, nodes } = await getCategoryTree();
   const rootNode = rootCategoryId ? nodes.get(rootCategoryId) : undefined;
   const rootSet = rootNode ? new Set(getDescendantIds(rootNode)) : null;
@@ -184,15 +205,35 @@ export async function queryCatalog(
       : 0,
     sales: product._count.orderItems,
     createdAt: product.createdAt.getTime(),
-    specs: new Map(
-      (Array.isArray(product.specs) ? (product.specs as { label?: unknown; value?: unknown }[]) : [])
-        .filter((spec) => typeof spec?.label === "string" && typeof spec?.value === "string")
-        .map((spec) => [String(spec.label).trim(), String(spec.value).trim()]),
-    ),
+    ...(() => {
+      const specs: Row["specs"] = new Map();
+      const keyLabels = new Set<string>();
+      const list = Array.isArray(product.specs) ? (product.specs as { label?: unknown; value?: unknown; key?: unknown }[]) : [];
+      for (const spec of list) {
+        if (typeof spec?.label !== "string" || typeof spec?.value !== "string") continue;
+        const label = spec.label.trim();
+        const value = spec.value.trim();
+        const labelKey = normalizeSpec(label);
+        if (!labelKey || !value || specs.has(labelKey)) continue;
+        specs.set(labelKey, { label, value, valueKey: normalizeSpec(value) });
+        if (spec.key === true) keyLabels.add(labelKey);
+      }
+      return { specs, keyLabels };
+    })(),
   }));
 
+  const context: MatchContext = {
+    inCategory,
+    specFilter: new Map(
+      [...parsed.specs.entries()].map(([label, values]) => [
+        normalizeSpec(label),
+        new Set([...values].map(normalizeSpec)),
+      ]),
+    ),
+  };
+
   // ---------- نتیجه ----------
-  const filtered = rows.filter((row) => matches(row, parsed, undefined, inCategory));
+  const filtered = rows.filter((row) => matches(row, parsed, undefined, context));
   if (parsed.sort === "relevance" && rankedIds) {
     const rank = new Map(rankedIds.map((id, index) => [id, index]));
     filtered.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
@@ -209,7 +250,7 @@ export async function queryCatalog(
   const products = pageProducts.sort((a, b) => pageIds.indexOf(a.id) - pageIds.indexOf(b.id));
 
   // ---------- فیلترها و شمارنده‌ها ----------
-  const withoutSelf = (key: FilterKey) => rows.filter((row) => matches(row, parsed, key, inCategory));
+  const withoutSelf = (key: FilterKey) => rows.filter((row) => matches(row, parsed, key, context));
 
   // ناوبری دسته: زیرمجموعه‌های سطح فعلی با تعداد کالا (شامل زیرمجموعه‌های خودشان)
   const categoryBase = withoutSelf("category");
@@ -229,26 +270,64 @@ export async function queryCatalog(
         : { id: null, label: rootNode ? `همه ${rootNode.name}` : "همه دسته‌ها" };
   }
 
-  // مشخصاتی که بین چند کالا مشترک‌اند و مقادیر محدودی دارند به فیلتر تبدیل می‌شوند
-  const specLabels = new Map<string, Set<string>>();
-  for (const row of rows) {
-    for (const [label, value] of row.specs) {
-      specLabels.set(label, (specLabels.get(label) ?? new Set()).add(value));
+  // فیلترهای مشخصات: اولویت با مشخصاتی که در این دسته «کلیدی» علامت خورده‌اند
+  // (بیشترین تکرار بین کالاها). اگر هیچ مشخصه کلیدی‌ای نباشد، مشخصات پرتکرار با مقادیر محدود.
+  const scopeRows = inCategory ? rows.filter((row) => inCategory.has(row.categoryId)) : rows;
+  const stats = new Map<string, { coverage: number; keyCount: number; values: Set<string>; labels: Map<string, number> }>();
+  for (const row of scopeRows) {
+    for (const [labelKey, spec] of row.specs) {
+      const stat = stats.get(labelKey) ?? { coverage: 0, keyCount: 0, values: new Set(), labels: new Map() };
+      stat.coverage += 1;
+      if (row.keyLabels.has(labelKey)) stat.keyCount += 1;
+      stat.values.add(spec.valueKey);
+      stat.labels.set(spec.label, (stat.labels.get(spec.label) ?? 0) + 1);
+      stats.set(labelKey, stat);
     }
   }
-  const coverage = (label: string) => rows.filter((row) => row.specs.has(label)).length;
-  const specFacets = [...specLabels.entries()]
-    .filter(([label, values]) => parsed.specs.has(label) || (values.size >= 2 && values.size <= 15 && coverage(label) >= 2))
-    .sort((a, b) => coverage(b[0]) - coverage(a[0]))
-    .slice(0, 6)
-    .map(([label]) => ({
-      label,
-      options: toOptions(
-        countBy(withoutSelf(`spec:${label}`), (row) => row.specs.get(label)),
-        [...(parsed.specs.get(label) ?? [])],
-      ),
-    }))
-    .filter((facet) => facet.options.length >= 2 || parsed.specs.has(facet.label));
+  const usesKeySpecs = [...stats.values()].some((stat) => stat.keyCount > 0);
+  const eligible = [...stats.entries()].filter(([labelKey, stat]) => {
+    if (context.specFilter.has(labelKey)) return true;
+    if (stat.values.size < 2 || stat.coverage < 2) return false;
+    return usesKeySpecs ? stat.keyCount > 0 : stat.values.size <= 15;
+  });
+  eligible.sort(([, a], [, b]) => (usesKeySpecs ? b.keyCount - a.keyCount : 0) || b.coverage - a.coverage);
+
+  const mostCommon = (counts: Map<string, number>) => [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+  const specFacets = eligible.slice(0, 6).map(([labelKey, stat]) => {
+    // گزینه‌ها بر اساس مقدار یکسان‌شده گروه می‌شوند و رایج‌ترین نوشتار نمایش داده می‌شود
+    const groups = new Map<string, { count: number; spellings: Map<string, number> }>();
+    for (const row of withoutSelf(`spec:${labelKey}`)) {
+      const spec = row.specs.get(labelKey);
+      if (!spec) continue;
+      const group = groups.get(spec.valueKey) ?? { count: 0, spellings: new Map() };
+      group.count += 1;
+      group.spellings.set(spec.value, (group.spellings.get(spec.value) ?? 0) + 1);
+      groups.set(spec.valueKey, group);
+    }
+    const selected = context.specFilter.get(labelKey) ?? new Set<string>();
+    const selectedRaw = [...parsed.specs.entries()].find(([label]) => normalizeSpec(label) === labelKey)?.[1] ?? new Set<string>();
+    for (const raw of selectedRaw) {
+      if (!groups.has(normalizeSpec(raw))) groups.set(normalizeSpec(raw), { count: 0, spellings: new Map([[raw, 1]]) });
+    }
+    // مقدار انتخاب‌شده با همان نوشتار آدرس نمایش داده می‌شود تا تیکش درست بماند
+    const display = (valueKey: string, spellings: Map<string, number>) =>
+      [...selectedRaw].find((raw) => normalizeSpec(raw) === valueKey) ?? mostCommon(spellings);
+
+    return {
+      label: [...parsed.specs.keys()].find((label) => normalizeSpec(label) === labelKey) ?? mostCommon(stat.labels),
+      options: [...groups.entries()]
+        .map(([valueKey, group]) => {
+          const value = display(valueKey, group.spellings);
+          // نمایش با ارقام فارسی؛ مقدار آدرس همان نوشتار اصلی می‌ماند
+          return { value, label: value.replace(/[0-9]/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]), count: group.count };
+        })
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fa")),
+      selected: selected.size > 0,
+    };
+  })
+    .filter((facet) => facet.options.length >= 2 || facet.selected)
+    .map(({ label, options }) => ({ label, options }));
 
   const prices = withoutSelf("price").map((row) => row.finalPrice);
   const ratingBase = withoutSelf("rating");

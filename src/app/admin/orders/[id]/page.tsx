@@ -1,6 +1,7 @@
 import { advanceOrderStatusAction, cancelOrderAction, updateOrderInfoAction } from "@/app/actions/adminActions";
 import AdminSubmitButton from "@/components/admin/AdminSubmitButton";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/checkout";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES, RETURN_STATUS_LABELS, RETURN_STATUS_STYLES } from "@/lib/checkout";
+import { getPaymentDeadlineHours, paymentDeadline } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
 import type { OrderStatus } from "@prisma/client";
 import { ArrowRight, MapPin, Printer, User } from "lucide-react";
@@ -22,11 +23,14 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     include: {
       user: { select: { name: true, mobile: true, email: true, _count: { select: { orders: true } } } },
       items: { include: { product: { select: { id: true, title: true, imageUrl: true } } } },
+      returns: { orderBy: { createdAt: "desc" }, select: { id: true, status: true, createdAt: true, reason: true } },
     },
   });
+  const deadlineHours = await getPaymentDeadlineHours();
 
   if (!order) notFound();
   const code = order.id.slice(-8).toUpperCase();
+  const payBy = order.status === "PENDING" ? paymentDeadline(order.createdAt, deadlineHours) : null;
 
   return (
     <div className="space-y-6">
@@ -131,9 +135,22 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                 <AdminSubmitButton className="btn-primary w-full">{NEXT_ACTION[order.status]}</AdminSubmitButton>
               </form>
             )}
+            {payBy && (
+              <p className="rounded-xl bg-amber-50 p-3 text-xs leading-6 text-amber-800">
+                در صورت عدم تأیید پرداخت، سفارش در{" "}
+                {payBy.toLocaleString("fa-IR", { dateStyle: "medium", timeStyle: "short" })} خودکار لغو می‌شود.
+              </p>
+            )}
+            {order.status === "CANCELED" && (
+              <p className="rounded-xl bg-slate-50 p-3 text-xs leading-6 text-slate-600">
+                لغو شده{order.canceledAt ? ` در ${order.canceledAt.toLocaleString("fa-IR", { dateStyle: "medium", timeStyle: "short" })}` : ""}
+                {order.cancelReason ? ` — ${order.cancelReason}` : ""}
+              </p>
+            )}
             {(order.status === "PENDING" || order.status === "PAID") && (
-              <form action={cancelOrderAction}>
+              <form action={cancelOrderAction} className="space-y-2">
                 <input type="hidden" name="orderId" value={order.id} />
+                <input name="reason" placeholder="دلیل لغو (به مشتری نمایش داده می‌شود)" className="field py-2 text-xs" />
                 <AdminSubmitButton className="btn-ghost w-full text-rose-600" pendingLabel="در حال لغو...">
                   لغو سفارش و بازگرداندن موجودی
                 </AdminSubmitButton>
@@ -158,6 +175,24 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               <AdminSubmitButton className="btn-dark w-full py-2.5">ذخیره</AdminSubmitButton>
             </form>
           </section>
+
+          {order.returns.length > 0 && (
+            <section className="card space-y-2 rounded-2xl p-5">
+              <h2 className="font-black text-ink">درخواست‌های مرجوعی</h2>
+              {order.returns.map((request) => (
+                <Link
+                  key={request.id}
+                  href={`/admin/returns/${request.id}`}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 p-3 text-xs hover:border-brand-300"
+                >
+                  <span className="line-clamp-1 text-slate-600">{request.reason}</span>
+                  <span className={`shrink-0 rounded-lg border px-2 py-0.5 font-bold ${RETURN_STATUS_STYLES[request.status]}`}>
+                    {RETURN_STATUS_LABELS[request.status]}
+                  </span>
+                </Link>
+              ))}
+            </section>
+          )}
         </aside>
       </div>
     </div>

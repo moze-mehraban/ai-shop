@@ -5,6 +5,7 @@ import ProductRow, { ProductRowItem } from "@/components/ProductRow";
 import { getDiscountedPrice } from "@/lib/pricing";
 import { productCardInclude } from "@/lib/catalog";
 import { getCategoryTree } from "@/lib/categories";
+import { expireUnpaidOrders } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
 import { ArrowLeft, Flame, LayoutGrid, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
@@ -12,6 +13,7 @@ import Link from "next/link";
 export const revalidate = 0;
 
 export default async function HomePage() {
+  await expireUnpaidOrders();
   const [products, discountedProducts, bestSellers, categoryTree] =
     await Promise.all([
       prisma.product.findMany({

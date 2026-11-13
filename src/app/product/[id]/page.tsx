@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { getAncestors, getCategoryTree } from "@/lib/categories";
 import { productCardInclude } from "@/lib/catalog";
 import { getDiscountedPrice } from "@/lib/pricing";
+import { expireUnpaidOrders } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
 import type { Metadata } from "next";
 import {
@@ -84,6 +85,7 @@ export async function generateMetadata({
 
 export default async function ProductDetailPage({ params }: ProductPageProps) {
   const { id } = await params;
+  await expireUnpaidOrders();
   const product = await loadProduct(id);
 
   if (!product) {

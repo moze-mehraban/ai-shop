@@ -8,6 +8,7 @@ import {
   TicketPercent,
   LayoutDashboard,
   MessageSquareText,
+  PackageOpen,
   ShoppingBag,
   Users,
 } from "lucide-react";
@@ -34,6 +35,11 @@ const navigationItems = [
     href: "/admin/orders",
     label: "سفارش‌ها",
     icon: ShoppingBag,
+  },
+  {
+    href: "/admin/returns",
+    label: "مرجوعی‌ها",
+    icon: PackageOpen,
   },
   {
     href: "/admin/users",

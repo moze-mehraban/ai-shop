@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/checkout";
+import { expireUnpaidOrders } from "@/lib/orders";
 import { prisma } from "@/lib/prisma";
 import { ChevronLeft, Package, ShoppingBag } from "lucide-react";
 import { getServerSession } from "next-auth";
@@ -7,6 +8,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function OrdersPage() {
+  await expireUnpaidOrders();
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {

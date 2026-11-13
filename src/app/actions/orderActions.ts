@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { evaluateCoupon, getShippingCost } from "@/lib/checkout";
 import { getDiscountedPrice } from "@/lib/pricing";
 import { prisma } from "@/lib/prisma";
+import { expireUnpaidOrders } from "@/lib/orders";
 import { getSettings } from "@/lib/settings";
 import { sendSmsIrTemplate } from "@/lib/smsir";
 import { getServerSession } from "next-auth";
@@ -64,6 +65,9 @@ export async function createOrderAction(input: CheckoutInput): Promise<CheckoutR
 
   const userId = session.user.id;
   const items = Array.isArray(input?.items) ? input.items : [];
+
+  // موجودی سفارش‌های پرداخت‌نشده منقضی‌شده قبل از بررسی موجودی آزاد می‌شود
+  await expireUnpaidOrders({ force: true });
 
   if (items.length === 0 || items.length > 50) {
     return { success: false, requiresLogin: false, message: "سبد خرید معتبر نیست." };

@@ -47,6 +47,7 @@ model User {
   wishlist  Wishlist[]
   addresses Address[]
   stockNotifications StockNotification[]
+  returns   ReturnRequest[]
 }
 
 // ۲. جدول دسته‌بندی محصولات
@@ -143,6 +144,14 @@ model Order {
   customerNote    String?
   adminNote       String?
 
+  deliveredAt     DateTime? // شروع مهلت مرجوعی
+
+  // لغو (دستی، خودکار به‌دلیل عدم پرداخت و ...)
+  canceledAt      DateTime?
+  cancelReason    String?
+
+  returns         ReturnRequest[]
+
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -162,6 +171,8 @@ model OrderItem {
 
   quantity  Int      @default(1)
   price     Float    // ثبت قیمت در لحظه خرید
+
+  returnItems ReturnItem[]
 }
 
 // ۷. جدول علاقه‌مندی‌ها
@@ -279,4 +290,45 @@ model StockNotification {
 model Setting {
   key   String @id
   value String
+}
+
+enum ReturnStatus {
+  REQUESTED // ثبت‌شده توسط مشتری
+  APPROVED  // تأیید شد؛ مشتری کالا را ارسال کند
+  REJECTED  // رد شد
+  RECEIVED  // کالا به فروشگاه رسید
+  REFUNDED  // مبلغ بازگردانده شد
+}
+
+// ۱۶. درخواست مرجوعی
+model ReturnRequest {
+  id           String       @id @default(cuid())
+  orderId      String
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status       ReturnStatus @default(REQUESTED)
+  reason       String
+  description  String?
+  adminNote    String?
+  refundAmount Float?
+  restocked    Boolean      @default(false)
+  items        ReturnItem[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+}
+
+model ReturnItem {
+  id          String        @id @default(cuid())
+  returnId    String
+  request     ReturnRequest @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItemId String
+  orderItem   OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  quantity    Int
+
+  @@index([returnId])
 }

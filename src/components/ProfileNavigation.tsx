@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, MapPin, Package, UserRoundCog } from "lucide-react";
+import { Heart, MapPin, Package, PackageOpen, UserRoundCog } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,6 +14,11 @@ const profileLinks = [
     href: "/profile/orders",
     label: "سفارش‌های من",
     icon: Package,
+  },
+  {
+    href: "/profile/returns",
+    label: "مرجوعی‌ها",
+    icon: PackageOpen,
   },
   {
     href: "/profile/addresses",

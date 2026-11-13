@@ -13,6 +13,8 @@ export const SETTING_FIELDS = {
   instagram: { label: "آیدی اینستاگرام", type: "text", fallback: "" },
   telegram: { label: "آیدی تلگرام", type: "text", fallback: "" },
   adminMobile: { label: "موبایل مدیر (برای پیامک سفارش جدید)", type: "text", fallback: "" },
+  paymentDeadlineHours: { label: "مهلت پرداخت سفارش (ساعت) — بعد از آن سفارش پرداخت‌نشده خودکار لغو می‌شود؛ ۰ = غیرفعال", type: "text", fallback: "24" },
+  returnWindowDays: { label: "مهلت درخواست مرجوعی بعد از تحویل (روز)؛ ۰ = غیرفعال", type: "text", fallback: "7" },
   aboutText: { label: "متن صفحه «درباره ما»", type: "textarea", fallback: "" },
   termsText: { label: "متن صفحه «قوانین و مقررات»", type: "textarea", fallback: "" },
   privacyText: { label: "متن صفحه «حریم خصوصی»", type: "textarea", fallback: "" },

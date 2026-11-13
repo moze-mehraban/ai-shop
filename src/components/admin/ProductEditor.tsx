@@ -4,7 +4,7 @@
 import { deleteProductAction, saveProductAction } from "@/app/actions/adminCatalogActions";
 import ActionForm from "@/components/admin/ActionForm";
 import AdminSubmitButton from "@/components/admin/AdminSubmitButton";
-import { ImagePlus, Plus, Trash2, X } from "lucide-react";
+import { ImagePlus, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 type Spec = { label: string; value: string; key?: boolean };
@@ -36,11 +36,14 @@ export default function ProductEditor({
   product,
   categories,
   brands,
+  specSuggestions = {},
 }: {
   product?: EditableProduct;
   categories: { id: string; label: string }[];
   brands: string[];
+  specSuggestions?: Record<string, { label: string; key: boolean }[]>;
 }) {
+  const [categoryId, setCategoryId] = useState(product?.categoryId ?? "");
   const [specs, setSpecs] = useState<Spec[]>(product?.specs.length ? product.specs : []);
   const [variants, setVariants] = useState<Variant[]>(
     product?.variants.map((variant) => ({
@@ -73,6 +76,22 @@ export default function ProductEditor({
   }
 
   const keyCount = specs.filter((spec) => spec.key).length;
+
+  // مشخصات رایج دسته انتخاب‌شده که هنوز به این کالا اضافه نشده‌اند
+  const sameLabel = (a: string, b: string) => a.replace(/\s+/g, " ").trim() === b.replace(/\s+/g, " ").trim();
+  const suggestions = (specSuggestions[categoryId] ?? []).filter(
+    (suggestion) => !specs.some((spec) => sameLabel(spec.label, suggestion.label)),
+  );
+  const addSuggested = (items: { label: string; key: boolean }[]) => {
+    let available = 4 - keyCount;
+    const rows = items.map((item) => {
+      const key = item.key && available > 0;
+      if (key) available -= 1;
+      return { label: item.label, value: "", key };
+    });
+    // ردیف‌های خالیِ موجود حذف می‌شوند تا لیست تمیز بماند
+    setSpecs([...specs.filter((spec) => spec.label.trim() || spec.value.trim()), ...rows]);
+  };
   const variantStock = variants.reduce((sum, variant) => sum + (Number(variant.stock) || 0), 0);
 
   return (
@@ -107,7 +126,14 @@ export default function ProductEditor({
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className={label} htmlFor="categoryId">دسته‌بندی</label>
-                <select id="categoryId" name="categoryId" required defaultValue={product?.categoryId ?? ""} className="field">
+                <select
+                  id="categoryId"
+                  name="categoryId"
+                  required
+                  defaultValue={product?.categoryId ?? ""}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                  className="field"
+                >
                   <option value="" disabled>انتخاب دسته</option>
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>{category.label}</option>
@@ -213,6 +239,37 @@ export default function ProductEditor({
                 افزودن ردیف
               </button>
             </div>
+            {suggestions.length > 0 && (
+              <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/50 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="flex items-center gap-1.5 text-xs font-bold text-brand-800">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    مشخصات رایج این دسته (برای یکدست ماندن فیلترها، همین عنوان‌ها را استفاده کنید)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => addSuggested(suggestions)}
+                    className="text-xs font-bold text-brand-700 hover:underline"
+                  >
+                    افزودن همه
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.label}
+                      type="button"
+                      onClick={() => addSuggested([suggestion])}
+                      className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 transition hover:border-brand-300 hover:text-brand-700"
+                    >
+                      <Plus className="h-3 w-3" />
+                      {suggestion.label}
+                      {suggestion.key && <span className="rounded-full bg-brand-100 px-1.5 text-[10px] text-brand-800">کلیدی</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {specs.map((spec, index) => (
               <div key={index} className="grid grid-cols-[180px_1fr_auto_auto] items-center gap-2">
                 <input

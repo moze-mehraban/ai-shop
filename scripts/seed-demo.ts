@@ -17,7 +17,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import sharp from "sharp";
 import {
   DEMO_CATEGORIES, DEMO_ORDERS, DEMO_PRODUCTS, DEMO_REVIEWS, DEMO_USERS,
-  type DemoIcon,
+  toSpecRows, type DemoIcon,
 } from "./demo-data";
 
 const prisma = new PrismaClient();
@@ -95,8 +95,14 @@ async function main() {
 
   // ---------- محصولات ----------
   let createdProducts = 0;
+  let updatedSpecs = 0;
   for (const product of DEMO_PRODUCTS) {
-    if (await prisma.product.findUnique({ where: { id: product.id } })) continue;
+    if (await prisma.product.findUnique({ where: { id: product.id } })) {
+      // محصول نمونه از قبل وجود دارد: فقط مشخصات (و علامت کلیدی) به‌روز می‌شود
+      await prisma.product.update({ where: { id: product.id }, data: { specs: toSpecRows(product.category, product.specs) } });
+      updatedSpecs += 1;
+      continue;
+    }
 
     const images: string[] = [];
     for (const color of product.colors) images.push(await makeImage(product.icon, color, product.brand));
@@ -112,7 +118,7 @@ async function main() {
         discountPercent: product.discountPercent ?? 0,
         stock,
         imageUrl: images[0],
-        specs: product.specs.map(([label, value]) => ({ label, value })),
+        specs: toSpecRows(product.category, product.specs),
         categoryId: categoryIds.get(product.category) ?? mobile.id,
         images: { create: images.slice(1).map((url, index) => ({ url, sortOrder: index + 1 })) },
         variants: product.variants
@@ -182,7 +188,7 @@ async function main() {
   }
 
   console.log(
-    `Demo data: ${createdCategories} categories, ${createdProducts} products, ${createdReviews} reviews, ${createdOrders} orders created.`,
+    `Demo data: ${createdCategories} categories, ${createdProducts} products, ${createdReviews} reviews, ${createdOrders} orders created; specs refreshed on ${updatedSpecs} existing demo products.`,
   );
 }
 

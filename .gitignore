@@ -45,3 +45,7 @@ my-ai-shop.rar
 /uploads/
 /backups/
 design-screenshots/
+
+# SQLite databases (contain customer data; back up separately, never commit)
+*.db
+*.db-journal

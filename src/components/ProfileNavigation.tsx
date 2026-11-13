@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, Package, UserRoundCog } from "lucide-react";
+import { Heart, MapPin, Package, UserRoundCog } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -16,6 +16,11 @@ const profileLinks = [
     icon: Package,
   },
   {
+    href: "/profile/addresses",
+    label: "آدرس‌ها",
+    icon: MapPin,
+  },
+  {
     href: "/profile/wishlist",
     label: "علاقه‌مندی‌ها",
     icon: Heart,
@@ -27,9 +32,12 @@ export default function ProfileNavigation() {
 
   return (
     <nav className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-[1200px] gap-2 overflow-x-auto px-4 py-3">
+      <div className="mx-auto flex max-w-[1200px] gap-2 overflow-x-auto overflow-y-hidden no-scrollbar px-4 py-3">
         {profileLinks.map((link) => {
-          const isActive = pathname === link.href;
+          const isActive =
+            link.href === "/profile"
+              ? pathname === link.href
+              : pathname.startsWith(link.href);
           const Icon = link.icon;
 
           return (
@@ -38,7 +46,7 @@ export default function ProfileNavigation() {
               href={link.href}
               className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${
                 isActive
-                  ? "bg-slate-900 text-white"
+                  ? "bg-ink text-white"
                   : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
               }`}
             >

@@ -1,4 +1,5 @@
 import DigikalaHeader from "@/components/DigikalaHeader";
+import SiteFooter from "@/components/SiteFooter";
 import ProfileNavigation from "@/components/ProfileNavigation";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
@@ -16,10 +17,11 @@ export default async function ProfileLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa]">
+    <div className="min-h-screen bg-canvas">
       <DigikalaHeader />
       <ProfileNavigation />
       {children}
+      <SiteFooter />
     </div>
   );
 }

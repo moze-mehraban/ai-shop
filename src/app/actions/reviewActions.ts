@@ -104,6 +104,6 @@ export async function addReviewAction(
 
   return {
     status: "success",
-    message: "دیدگاه شما با موفقیت ثبت شد.",
+    message: "دیدگاه شما ثبت شد و پس از تأیید مدیر نمایش داده می‌شود.",
   };
 }

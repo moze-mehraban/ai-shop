@@ -38,6 +38,10 @@ export default async function AdminDashboardPage() {
     ratingAggregate,
     statusGroups,
     topOrderItems,
+    pendingOrders,
+    paidOrders,
+    pendingReviews,
+    waitingRestock,
   ] = await Promise.all([
     prisma.product.count(),
     prisma.user.count(),
@@ -70,12 +74,12 @@ export default async function AdminDashboardPage() {
       },
     }),
     prisma.order.aggregate({
-      where: { status: { not: "CANCELED" } },
+      where: { status: { in: ["PAID", "SHIPPED", "DELIVERED"] } },
       _sum: { totalAmount: true },
     }),
     prisma.order.aggregate({
       where: {
-        status: { not: "CANCELED" },
+        status: { in: ["PAID", "SHIPPED", "DELIVERED"] },
         createdAt: { gte: thirtyDaysAgo },
       },
       _sum: { totalAmount: true },
@@ -102,7 +106,18 @@ export default async function AdminDashboardPage() {
       },
       take: 5,
     }),
+    prisma.order.count({ where: { status: "PENDING" } }),
+    prisma.order.count({ where: { status: "PAID" } }),
+    prisma.review.count({ where: { isApproved: false } }),
+    prisma.stockNotification.count({ where: { notifiedAt: null } }),
   ]);
+
+  const todos = [
+    { count: pendingOrders, label: "سفارش در انتظار پرداخت", href: "/admin/orders?status=PENDING" },
+    { count: paidOrders, label: "سفارش آماده ارسال", href: "/admin/orders?status=PAID" },
+    { count: pendingReviews, label: "دیدگاه در انتظار تأیید", href: "/admin/reviews" },
+    { count: waitingRestock, label: "درخواست «موجود شد خبرم کن»", href: "/admin/products?status=out" },
+  ].filter((todo) => todo.count > 0);
 
   const topProducts = await prisma.product.findMany({
     where: {
@@ -126,7 +141,7 @@ export default async function AdminDashboardPage() {
   return (
     <div className="space-y-8">
       <section>
-        <p className="text-xs font-bold text-[#ef394e]">نمای کلی فروشگاه</p>
+        <p className="text-xs font-bold text-brand-500">نمای کلی فروشگاه</p>
         <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-3xl font-black text-slate-900">
@@ -146,11 +161,28 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
+      {todos.length > 0 && (
+        <section className="flex flex-wrap gap-3">
+          {todos.map((todo) => (
+            <Link
+              key={todo.href + todo.label}
+              href={todo.href}
+              className="flex items-center gap-2 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-800 transition hover:bg-orange-100"
+            >
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-orange-500 px-2 text-xs text-white">
+                {todo.count.toLocaleString("fa-IR")}
+              </span>
+              {todo.label}
+            </Link>
+          ))}
+        </section>
+      )}
+
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           title="درآمد کل"
           value={`${(revenueAggregate._sum.totalAmount ?? 0).toLocaleString("fa-IR")} تومان`}
-          subtitle="بدون سفارش‌های لغوشده"
+          subtitle="سفارش‌های پرداخت‌شده"
           icon={<CircleDollarSign className="h-6 w-6" />}
           color="bg-emerald-50 text-emerald-700"
         />
@@ -204,7 +236,7 @@ export default async function AdminDashboardPage() {
                   </div>
                   <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
                     <div
-                      className="h-full rounded-full bg-gradient-to-l from-[#ef394e] to-amber-400"
+                      className="h-full rounded-full bg-gradient-to-l from-brand-500 to-amber-400"
                       style={{
                         width: `${Math.round((count / maxStatusCount) * 100)}%`,
                       }}
@@ -257,7 +289,7 @@ export default async function AdminDashboardPage() {
             </div>
             <Link
               href="/admin/orders"
-              className="flex items-center gap-1 text-xs font-bold text-[#ef394e]"
+              className="flex items-center gap-1 text-xs font-bold text-brand-500"
             >
               همه سفارش‌ها
               <ArrowUpLeft className="h-4 w-4" />
@@ -307,7 +339,7 @@ export default async function AdminDashboardPage() {
             </div>
             <Link
               href="/admin/products"
-              className="flex items-center gap-1 text-xs font-bold text-[#ef394e]"
+              className="flex items-center gap-1 text-xs font-bold text-brand-500"
             >
               مدیریت محصولات
               <ArrowUpLeft className="h-4 w-4" />

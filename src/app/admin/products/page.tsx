@@ -1,318 +1,174 @@
-import {
-  createCategoryAction,
-  createProductAction,
-  deleteCategoryAction,
-  deleteProductAction,
-  updateProductAction,
-} from "@/app/actions/adminActions";
-import AdminSubmitButton from "@/components/admin/AdminSubmitButton";
-import {
-  FolderPlus,
-  ImageIcon,
-  PackagePlus,
-  Pencil,
-  Trash2,
-} from "lucide-react";
-import Image from "next/image";
-import GenerateSummaryButton from "@/components/admin/GenerateSummaryButton";
+import { flattenTree, getCategoryTree, getDescendantIds } from "@/lib/categories";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
+import { ImageIcon, PackagePlus, Search } from "lucide-react";
+import Link from "next/link";
 
 export const revalidate = 0;
 
-const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#ef394e] focus:bg-white focus:ring-4 focus:ring-[#ef394e]/10";
+const PAGE_SIZE = 25;
 
-export default async function AdminProductsPage() {
-  const { prisma } = await import("@/lib/prisma");
-  const [products, categories] = await Promise.all([
+export default async function AdminProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; category?: string; status?: string; page?: string }>;
+}) {
+  const params = await searchParams;
+  const q = String(params.q ?? "").trim().slice(0, 100);
+  const status = params.status ?? "";
+  const page = Math.max(1, Number(params.page) || 1);
+  const { roots, nodes } = await getCategoryTree();
+  const categoryNode = params.category ? nodes.get(params.category) : undefined;
+
+  const where: Prisma.ProductWhereInput = {
+    AND: [
+      q ? { OR: [{ title: { contains: q } }, { brand: { contains: q } }, { id: { endsWith: q } }] } : {},
+      categoryNode ? { categoryId: { in: getDescendantIds(categoryNode) } } : {},
+      status === "active" ? { isActive: true } : {},
+      status === "inactive" ? { isActive: false } : {},
+      status === "out" ? { stock: { lte: 0 } } : {},
+      status === "low" ? { stock: { gt: 0, lte: 5 } } : {},
+    ],
+  };
+
+  const [total, products] = await Promise.all([
+    prisma.product.count({ where }),
     prisma.product.findMany({
+      where,
       include: {
-        category: true,
-        _count: {
-          select: { reviews: true, orderItems: true },
-        },
+        category: { select: { name: true } },
+        _count: { select: { variants: true, orderItems: true } },
       },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.category.findMany({
-      include: {
-        _count: { select: { products: true } },
-      },
-      orderBy: { name: "asc" },
+      orderBy: { updatedAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
   ]);
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageHref = (target: number) => {
+    const search = new URLSearchParams();
+    if (q) search.set("q", q);
+    if (params.category) search.set("category", params.category);
+    if (status) search.set("status", status);
+    if (target > 1) search.set("page", String(target));
+    return `/admin/products?${search.toString()}`;
+  };
 
   return (
-    <div className="space-y-7">
-      <div>
-        <p className="text-xs font-bold text-[#ef394e]">کاتالوگ فروشگاه</p>
-        <h1 className="mt-1 text-3xl font-black text-slate-900">
-          محصولات و دسته‌ها
-        </h1>
-        <p className="mt-2 text-sm text-slate-500">
-          قیمت، موجودی، تصاویر و محتوای هوشمند کالاها را مدیریت کنید.
-        </p>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-ink md:text-3xl">محصولات</h1>
+          <p className="mt-1 text-sm text-slate-500">{total.toLocaleString("fa-IR")} محصول</p>
+        </div>
+        <Link href="/admin/products/new" className="btn-primary">
+          <PackagePlus className="h-4 w-4" />
+          افزودن محصول
+        </Link>
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="rounded-2xl bg-rose-50 p-3 text-[#ef394e]">
-              <PackagePlus className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="font-black text-slate-900">افزودن محصول جدید</h2>
-              <p className="mt-1 text-[11px] text-slate-400">
-                همه فیلدهای اصلی را قبل از ذخیره بررسی کنید.
-              </p>
-            </div>
-          </div>
-
-          <form action={createProductAction} className="grid gap-4 md:grid-cols-2">
-            <Field label="عنوان محصول" name="title" required className="md:col-span-2" />
-            <Field label="قیمت (تومان)" name="price" type="number" min="0" required />
-            <Field label="درصد تخفیف" name="discountPercent" type="number" min="0" max="90" defaultValue={0} required />
-            <Field label="موجودی" name="stock" type="number" min="0" required />
-            <label className="space-y-1.5 text-xs font-bold text-slate-600">
-              دسته‌بندی
-              <select name="categoryId" required className={inputClass} defaultValue="">
-                <option value="" disabled>
-                  انتخاب دسته‌بندی
-                </option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Field
-              label="آدرس تصویر"
-              name="imageUrl"
-              type="url"
-              placeholder="https://images.unsplash.com/..."
-            />
-            <label className="space-y-1.5 text-xs font-bold text-slate-600 md:col-span-2">
-              توضیحات
-              <textarea
-                name="description"
-                required
-                rows={3}
-                className={inputClass}
-                placeholder="توضیح کوتاه و دقیق درباره محصول"
-              />
-            </label>
-            <AdminSubmitButton
-              className="rounded-xl bg-[#ef394e] px-5 py-3 text-xs font-bold text-white transition hover:bg-[#d82a3d] md:col-span-2"
-              pendingLabel="در حال افزودن..."
-            >
-              افزودن محصول
-            </AdminSubmitButton>
-          </form>
+      <form className="card grid gap-3 rounded-2xl p-4 md:grid-cols-[1fr_220px_180px_auto]">
+        <div className="relative">
+          <Search className="absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input name="q" defaultValue={q} placeholder="جستجوی عنوان، برند یا کد" className="field py-2.5 pr-9" />
         </div>
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="rounded-2xl bg-purple-50 p-3 text-purple-600">
-              <FolderPlus className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="font-black text-slate-900">دسته‌بندی‌ها</h2>
-              <p className="mt-1 text-[11px] text-slate-400">
-                دسته خالی را می‌توانید حذف کنید.
-              </p>
-            </div>
-          </div>
-
-          <form action={createCategoryAction} className="space-y-3">
-            <input name="name" required placeholder="نام دسته جدید" className={inputClass} />
-            <input name="slug" placeholder="slug اختیاری" className={inputClass} />
-            <AdminSubmitButton
-              className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold text-white transition hover:bg-slate-800"
-              pendingLabel="در حال ساخت..."
-            >
-              ساخت دسته‌بندی
-            </AdminSubmitButton>
-          </form>
-
-          <div className="mt-5 space-y-2">
-            {categories.map((category) => (
-              <div
-                key={category.id}
-                className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5"
-              >
-                <span className="flex-1 text-xs font-bold text-slate-700">
-                  {category.name}
-                </span>
-                <span className="text-[10px] text-slate-400">
-                  {category._count.products.toLocaleString("fa-IR")} کالا
-                </span>
-                {category._count.products === 0 && (
-                  <form action={deleteCategoryAction}>
-                    <input type="hidden" name="categoryId" value={category.id} />
-                    <button
-                      type="submit"
-                      aria-label={`حذف ${category.name}`}
-                      className="text-slate-400 transition hover:text-rose-500"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </form>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <h2 className="font-black text-slate-900">فهرست محصولات</h2>
-            <p className="mt-1 text-xs text-slate-400">
-              {products.length.toLocaleString("fa-IR")} محصول در کاتالوگ
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {products.map((product) => (
-            <details
-              key={product.id}
-              className="group rounded-2xl border border-slate-100 bg-slate-50 open:bg-white"
-            >
-              <summary className="flex cursor-pointer list-none items-center gap-4 p-4">
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white">
-                  {product.imageUrl ? (
-                    <Image
-                      src={product.imageUrl}
-                      alt={product.title}
-                      fill
-                      unoptimized
-                      sizes="56px"
-                      className="object-cover"
-                    />
-                  ) : (
-                    <ImageIcon className="m-4 h-6 w-6 text-slate-300" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-black text-slate-800">
-                    {product.title}
-                  </h3>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {product.category.name} •{" "}
-                    {product._count.reviews.toLocaleString("fa-IR")} دیدگاه
-                  </p>
-                </div>
-                <div className="hidden text-left sm:block">
-                  <p className="text-sm font-black text-slate-900">
-                    {product.price.toLocaleString("fa-IR")}
-                  </p>
-                  <p className="text-[10px] text-slate-400">
-                    تومان
-                    {product.discountPercent > 0 &&
-                      ` • ${product.discountPercent.toLocaleString("fa-IR")}٪ تخفیف`}
-                  </p>
-                </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-[10px] font-black ${
-                    product.stock <= 5
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-emerald-100 text-emerald-700"
-                  }`}
-                >
-                  موجودی {product.stock.toLocaleString("fa-IR")}
-                </span>
-                <Pencil className="h-4 w-4 text-slate-300 transition group-open:text-[#ef394e]" />
-              </summary>
-
-              <div className="border-t border-slate-100 p-4">
-                <form action={updateProductAction} className="grid gap-4 md:grid-cols-2">
-                  <input type="hidden" name="productId" value={product.id} />
-                  <Field label="عنوان محصول" name="title" defaultValue={product.title} required className="md:col-span-2" />
-                  <Field label="قیمت (تومان)" name="price" type="number" min="0" defaultValue={product.price} required />
-                  <Field label="درصد تخفیف" name="discountPercent" type="number" min="0" max="90" defaultValue={product.discountPercent} required />
-                  <Field label="موجودی" name="stock" type="number" min="0" defaultValue={product.stock} required />
-                  <label className="space-y-1.5 text-xs font-bold text-slate-600">
-                    دسته‌بندی
-                    <select name="categoryId" defaultValue={product.categoryId} className={inputClass}>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <Field label="آدرس تصویر" name="imageUrl" type="url" defaultValue={product.imageUrl || ""} />
-                  <label className="space-y-1.5 text-xs font-bold text-slate-600 md:col-span-2">
-                    توضیحات
-                    <textarea name="description" required rows={3} defaultValue={product.description} className={inputClass} />
-                  </label>
-                  <label className="space-y-1.5 text-xs font-bold text-slate-600 md:col-span-2">
-                    خلاصه هوشمند
-                    <textarea
-                      key={product.aiSummary || "empty-summary"}
-                      name="aiSummary"
-                      rows={2}
-                      defaultValue={product.aiSummary || ""}
-                      className={inputClass}
-                      placeholder="خلاصه‌ای که در صفحه محصول نمایش داده می‌شود"
-                    />
-                  </label>
-                  <AdminSubmitButton
-                    className="w-full rounded-xl bg-slate-900 px-6 py-4 text-sm font-black text-white transition hover:bg-slate-800 md:col-span-2"
-                    pendingLabel="در حال ذخیره..."
-                  >
-                    ذخیره تغییرات
-                  </AdminSubmitButton>
-                </form>
-                <div className="mt-4">
-                  <GenerateSummaryButton
-                    productId={product.id}
-                    reviewCount={product._count.reviews}
-                  />
-                </div>
-                {product._count.orderItems === 0 && (
-                  <form action={deleteProductAction} className="mt-3">
-                    <input type="hidden" name="productId" value={product.id} />
-                    <AdminSubmitButton
-                      className="rounded-xl border border-rose-200 px-5 py-3 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
-                      pendingLabel="در حال حذف..."
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      حذف محصول
-                    </AdminSubmitButton>
-                  </form>
-                )}
-              </div>
-            </details>
+        <select name="category" defaultValue={params.category ?? ""} className="field py-2.5">
+          <option value="">همه دسته‌ها</option>
+          {flattenTree(roots).map(({ node, depth }) => (
+            <option key={node.id} value={node.id}>
+              {"— ".repeat(depth)}
+              {node.name}
+            </option>
           ))}
-        </div>
-      </section>
-    </div>
-  );
-}
+        </select>
+        <select name="status" defaultValue={status} className="field py-2.5">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="active">فعال</option>
+          <option value="inactive">غیرفعال</option>
+          <option value="low">موجودی کم (۵ و کمتر)</option>
+          <option value="out">ناموجود</option>
+        </select>
+        <button type="submit" className="btn-dark py-2.5">
+          اعمال
+        </button>
+      </form>
 
-function Field({
-  label,
-  name,
-  className = "",
-  ...props
-}: {
-  label: string;
-  name: string;
-  className?: string;
-  type?: string;
-  min?: string;
-  max?: string;
-  required?: boolean;
-  defaultValue?: string | number;
-  placeholder?: string;
-}) {
-  return (
-    <label className={`space-y-1.5 text-xs font-bold text-slate-600 ${className}`}>
-      {label}
-      <input name={name} className={inputClass} {...props} />
-    </label>
+      <div className="card overflow-hidden rounded-2xl">
+        <div className="overflow-x-auto overflow-y-hidden">
+          <table className="w-full min-w-[760px] text-right text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500">
+              <tr>
+                <th className="p-3 font-bold">محصول</th>
+                <th className="p-3 font-bold">دسته</th>
+                <th className="p-3 font-bold">قیمت (تومان)</th>
+                <th className="p-3 font-bold">موجودی</th>
+                <th className="p-3 font-bold">فروش</th>
+                <th className="p-3 font-bold">وضعیت</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {products.map((product) => (
+                <tr key={product.id} className="transition hover:bg-slate-50/70">
+                  <td className="p-3">
+                    <Link href={`/admin/products/${product.id}`} className="flex items-center gap-3">
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-50">
+                        {product.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={product.imageUrl} alt="" className="h-full w-full object-contain p-1 mix-blend-multiply" />
+                        ) : (
+                          <ImageIcon className="h-5 w-5 text-slate-300" />
+                        )}
+                      </span>
+                      <span>
+                        <span className="line-clamp-1 font-bold text-ink hover:text-brand-700">{product.title}</span>
+                        <span className="text-xs text-slate-400">
+                          {product.brand ?? "بدون برند"}
+                          {product._count.variants > 0 && ` · ${product._count.variants.toLocaleString("fa-IR")} تنوع`}
+                        </span>
+                      </span>
+                    </Link>
+                  </td>
+                  <td className="p-3 text-slate-600">{product.category.name}</td>
+                  <td className="p-3">
+                    {product.price.toLocaleString("fa-IR")}
+                    {product.discountPercent > 0 && (
+                      <span className="mr-1 rounded bg-brand-50 px-1.5 text-[11px] font-bold text-brand-700">
+                        {product.discountPercent.toLocaleString("fa-IR")}٪
+                      </span>
+                    )}
+                  </td>
+                  <td className={`p-3 font-bold ${product.stock <= 0 ? "text-rose-600" : product.stock <= 5 ? "text-orange-600" : "text-slate-700"}`}>
+                    {product.stock.toLocaleString("fa-IR")}
+                  </td>
+                  <td className="p-3 text-slate-600">{product._count.orderItems.toLocaleString("fa-IR")}</td>
+                  <td className="p-3">
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${product.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                      {product.isActive ? "فعال" : "غیرفعال"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {products.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-10 text-center text-slate-400">
+                    محصولی پیدا نشد.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {pageCount > 1 && (
+        <nav className="flex justify-center gap-2 text-sm">
+          {page > 1 && <Link href={pageHref(page - 1)} className="btn-ghost px-4 py-2">قبلی</Link>}
+          <span className="px-3 py-2 text-slate-500">
+            صفحه {page.toLocaleString("fa-IR")} از {pageCount.toLocaleString("fa-IR")}
+          </span>
+          {page < pageCount && <Link href={pageHref(page + 1)} className="btn-ghost px-4 py-2">بعدی</Link>}
+        </nav>
+      )}
+    </div>
   );
 }

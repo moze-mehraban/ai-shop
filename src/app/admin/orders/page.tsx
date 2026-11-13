@@ -1,312 +1,145 @@
-import {
-  advanceOrderStatusAction,
-  cancelOrderAction,
-} from "@/app/actions/adminActions";
-import AdminSubmitButton from "@/components/admin/AdminSubmitButton";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/checkout";
+import { normalizeDigits } from "@/lib/digits";
 import { prisma } from "@/lib/prisma";
-import type { OrderStatus } from "@prisma/client";
-import {
-  CheckCircle2,
-  Clock3,
-  Package,
-  ShoppingBag,
-  Truck,
-  XCircle,
-  ArrowLeft,
-} from "lucide-react";
+import type { OrderStatus, Prisma } from "@prisma/client";
+import { Search } from "lucide-react";
 import Link from "next/link";
 
 export const revalidate = 0;
 
-const statusConfig: Record<
-  OrderStatus,
-  { label: string; className: string; icon: typeof Clock3 }
-> = {
-  PENDING: {
-    label: "در انتظار پرداخت",
-    className: "bg-amber-50 text-amber-700 border-amber-200",
-    icon: Clock3,
-  },
-  PAID: {
-    label: "پرداخت‌شده",
-    className: "bg-sky-50 text-sky-700 border-sky-200",
-    icon: CheckCircle2,
-  },
-  SHIPPED: {
-    label: "ارسال‌شده",
-    className: "bg-purple-50 text-purple-700 border-purple-200",
-    icon: Truck,
-  },
-  DELIVERED: {
-    label: "تحویل‌شده",
-    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    icon: Package,
-  },
-  CANCELED: {
-    label: "لغوشده",
-    className: "bg-rose-50 text-rose-700 border-rose-200",
-    icon: XCircle,
-  },
-};
-
-const nextStatusConfig: Partial<Record<OrderStatus, string>> = {
-  PENDING: "تأیید پرداخت",
-  PAID: "ثبت ارسال سفارش",
-  SHIPPED: "ثبت تحویل سفارش",
-};
+const PAGE_SIZE = 30;
+const STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[];
 
 export default async function AdminOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
-  const { status } = await searchParams;
-  const selectedStatus =
-    status && status in statusConfig ? (status as OrderStatus) : undefined;
+  const params = await searchParams;
+  const status = STATUSES.includes(params.status as OrderStatus) ? (params.status as OrderStatus) : undefined;
+  const q = normalizeDigits(String(params.q ?? "")).trim().slice(0, 60);
+  const page = Math.max(1, Number(params.page) || 1);
 
-  const [orders, orderCount, pendingCount] = await Promise.all([
+  const where: Prisma.OrderWhereInput = {
+    AND: [
+      status ? { status } : {},
+      q
+        ? {
+            OR: [
+              { id: { endsWith: q.toLowerCase() } },
+              { recipientMobile: { contains: q } },
+              { recipientName: { contains: q } },
+              { trackingCode: { contains: q } },
+              { user: { is: { mobile: { contains: q } } } },
+            ],
+          }
+        : {},
+    ],
+  };
+
+  const [orders, total, counts] = await Promise.all([
     prisma.order.findMany({
-      where: selectedStatus ? { status: selectedStatus } : undefined,
+      where,
       include: {
-        user: {
-          select: {
-            name: true,
-            mobile: true,
-            email: true,
-          },
-        },
-        items: {
-          include: {
-            product: {
-              select: {
-                title: true,
-              },
-            },
-          },
-        },
+        user: { select: { name: true, mobile: true } },
+        _count: { select: { items: true } },
       },
       orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
-    prisma.order.count(),
-    prisma.order.count({ where: { status: "PENDING" } }),
+    prisma.order.count({ where }),
+    prisma.order.groupBy({ by: ["status"], _count: { _all: true } }),
   ]);
+  const countFor = (value: OrderStatus) => counts.find((row) => row.status === value)?._count._all ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const href = (changes: Record<string, string | undefined>) => {
+    const search = new URLSearchParams();
+    const merged = { status, q: q || undefined, page: undefined as string | undefined, ...changes };
+    for (const [key, value] of Object.entries(merged)) if (value) search.set(key, value);
+    return `/admin/orders?${search.toString()}`;
+  };
 
   return (
-    <div className="space-y-7">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-bold text-[#ef394e]">عملیات فروش</p>
-          <h1 className="mt-1 text-3xl font-black text-slate-900">
-            مدیریت سفارش‌ها
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            وضعیت پرداخت، ارسال و تحویل سفارش‌ها را کنترل کنید.
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <StatBadge
-            label="کل سفارش‌ها"
-            value={orderCount.toLocaleString("fa-IR")}
-          />
-          <StatBadge
-            label="در انتظار"
-            value={pendingCount.toLocaleString("fa-IR")}
-            warning
-          />
-        </div>
-      </div>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-black text-ink md:text-3xl">سفارش‌ها</h1>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        <FilterLink href="/admin/orders" active={!selectedStatus}>
+      <div className="flex flex-wrap gap-2">
+        <Link href={href({ status: undefined })} className={`rounded-full px-4 py-2 text-xs font-bold ${!status ? "bg-ink text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
           همه
-        </FilterLink>
-        {(Object.keys(statusConfig) as OrderStatus[]).map((orderStatus) => (
-          <FilterLink
-            key={orderStatus}
-            href={`/admin/orders?status=${orderStatus}`}
-            active={selectedStatus === orderStatus}
+        </Link>
+        {STATUSES.map((value) => (
+          <Link
+            key={value}
+            href={href({ status: value })}
+            className={`rounded-full px-4 py-2 text-xs font-bold ${status === value ? "bg-ink text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}
           >
-            {statusConfig[orderStatus].label}
-          </FilterLink>
+            {ORDER_STATUS_LABELS[value]} ({countFor(value).toLocaleString("fa-IR")})
+          </Link>
         ))}
       </div>
 
-      <section className="space-y-4">
-        {orders.map((order) => {
-          const config = statusConfig[order.status];
-          const StatusIcon = config.icon;
-          const nextStep = nextStatusConfig[order.status];
+      <form className="card flex gap-2 rounded-2xl p-3">
+        {status && <input type="hidden" name="status" value={status} />}
+        <div className="relative flex-1">
+          <Search className="absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input name="q" defaultValue={q} placeholder="کد سفارش، موبایل، نام گیرنده یا کد رهگیری" className="field py-2.5 pr-9" />
+        </div>
+        <button type="submit" className="btn-dark py-2.5">جستجو</button>
+      </form>
 
-          return (
-            <article
-              key={order.id}
-              className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-black text-slate-900">
-                      سفارش #{order.id.slice(-8).toUpperCase()}
-                    </h2>
-                    <span
-                      className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black ${config.className}`}
-                    >
-                      <StatusIcon className="h-3.5 w-3.5" />
-                      {config.label}
+      <div className="card overflow-hidden rounded-2xl">
+        <div className="overflow-x-auto overflow-y-hidden">
+          <table className="w-full min-w-[720px] text-right text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500">
+              <tr>
+                <th className="p-3 font-bold">کد</th>
+                <th className="p-3 font-bold">مشتری</th>
+                <th className="p-3 font-bold">تاریخ</th>
+                <th className="p-3 font-bold">اقلام</th>
+                <th className="p-3 font-bold">مبلغ (تومان)</th>
+                <th className="p-3 font-bold">وضعیت</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {orders.map((order) => (
+                <tr key={order.id} className="hover:bg-slate-50/70">
+                  <td className="p-3">
+                    <Link href={`/admin/orders/${order.id}`} className="font-mono font-bold text-brand-700 hover:underline" dir="ltr">
+                      {order.id.slice(-8).toUpperCase()}
+                    </Link>
+                  </td>
+                  <td className="p-3">
+                    <span className="block font-bold text-ink">{order.recipientName || order.user.name || "—"}</span>
+                    <span className="text-xs text-slate-400" dir="ltr">{order.recipientMobile || order.user.mobile}</span>
+                  </td>
+                  <td className="p-3 text-slate-600">{order.createdAt.toLocaleDateString("fa-IR")}</td>
+                  <td className="p-3 text-slate-600">{order._count.items.toLocaleString("fa-IR")}</td>
+                  <td className="p-3 font-bold">{order.totalAmount.toLocaleString("fa-IR")}</td>
+                  <td className="p-3">
+                    <span className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${ORDER_STATUS_STYLES[order.status]}`}>
+                      {ORDER_STATUS_LABELS[order.status]}
                     </span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    {order.user.name ||
-                      order.user.mobile ||
-                      order.user.email ||
-                      "کاربر بدون نام"}{" "}
-                    • {order.createdAt.toLocaleString("fa-IR")}
-                  </p>
-                </div>
-                <div className="text-left">
-                  <p className="text-lg font-black text-slate-900">
-                    {order.totalAmount.toLocaleString("fa-IR")}
-                  </p>
-                  <p className="text-[10px] text-slate-400">تومان</p>
-                </div>
-              </div>
+                  </td>
+                </tr>
+              ))}
+              {orders.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-10 text-center text-slate-400">سفارشی پیدا نشد.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-              <div className="grid gap-5 pt-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-                <div className="space-y-2">
-                  {order.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-4 py-3 text-xs"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-bold text-slate-700">
-                          {item.product.title}
-                        </p>
-                        <p className="mt-1 text-[10px] text-slate-400">
-                          تعداد {item.quantity.toLocaleString("fa-IR")}
-                        </p>
-                      </div>
-                      <span className="shrink-0 font-black text-slate-700">
-                        {(item.price * item.quantity).toLocaleString("fa-IR")}{" "}
-                        تومان
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold text-slate-600">
-                    مدیریت وضعیت سفارش
-                  </p>
-                  <p className="mt-1 text-[11px] leading-5 text-slate-400">
-                    وضعیت فعلی: {config.label}
-                  </p>
-
-                  {nextStep && (
-                    <form action={advanceOrderStatusAction} className="mt-4">
-                      <input type="hidden" name="orderId" value={order.id} />
-                      <AdminSubmitButton
-                        className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold text-white transition hover:bg-slate-800"
-                        pendingLabel="در حال ثبت مرحله بعد..."
-                      >
-                        <ArrowLeft className="h-4 w-4" />
-                        {nextStep}
-                      </AdminSubmitButton>
-                    </form>
-                  )}
-
-                  {order.status === "DELIVERED" && (
-                    <div className="mt-4 rounded-xl bg-emerald-100 px-3 py-2.5 text-center text-xs font-bold text-emerald-700">
-                      فرایند سفارش تکمیل شده است.
-                    </div>
-                  )}
-
-                  {(order.status === "PENDING" ||
-                    order.status === "PAID") && (
-                    <form action={cancelOrderAction} className="mt-3">
-                      <input type="hidden" name="orderId" value={order.id} />
-                      <AdminSubmitButton
-                        className="w-full rounded-xl border border-rose-200 bg-white px-4 py-3 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
-                        pendingLabel="در حال لغو سفارش..."
-                      >
-                        <XCircle className="h-4 w-4" />
-                        لغو سفارش
-                      </AdminSubmitButton>
-                    </form>
-                  )}
-
-                  {order.status === "CANCELED" && (
-                    <div className="mt-4 rounded-xl bg-rose-100 px-3 py-2.5 text-center text-xs font-bold text-rose-700">
-                      سفارش لغو شده و موجودی محصولات بازگردانده شده است.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </article>
-          );
-        })}
-
-        {orders.length === 0 && (
-          <div className="flex min-h-72 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white text-center">
-            <ShoppingBag className="h-10 w-10 text-slate-300" />
-            <h2 className="mt-4 font-black text-slate-700">
-              سفارشی در این وضعیت نیست
-            </h2>
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function FilterLink({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`shrink-0 rounded-xl px-4 py-2.5 text-xs font-bold transition ${
-        active
-          ? "bg-slate-900 text-white"
-          : "border border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
-
-function StatBadge({
-  label,
-  value,
-  warning = false,
-}: {
-  label: string;
-  value: string;
-  warning?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border px-4 py-2.5 ${
-        warning
-          ? "border-amber-200 bg-amber-50"
-          : "border-slate-200 bg-white"
-      }`}
-    >
-      <p className="text-[10px] text-slate-400">{label}</p>
-      <p
-        className={`mt-0.5 font-black ${
-          warning ? "text-amber-700" : "text-slate-800"
-        }`}
-      >
-        {value}
-      </p>
+      {pageCount > 1 && (
+        <nav className="flex justify-center gap-2 text-sm">
+          {page > 1 && <Link href={href({ page: String(page - 1) })} className="btn-ghost px-4 py-2">قبلی</Link>}
+          <span className="px-3 py-2 text-slate-500">صفحه {page.toLocaleString("fa-IR")} از {pageCount.toLocaleString("fa-IR")}</span>
+          {page < pageCount && <Link href={href({ page: String(page + 1) })} className="btn-ghost px-4 py-2">بعدی</Link>}
+        </nav>
+      )}
     </div>
   );
 }

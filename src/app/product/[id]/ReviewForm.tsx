@@ -44,19 +44,19 @@ export default function ReviewForm({ productId }: ReviewFormProps) {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-56 items-center justify-center rounded-3xl border border-slate-200 bg-white">
-        <Loader2 className="h-6 w-6 animate-spin text-[#ef394e]" />
+      <div className="flex min-h-32 items-center justify-center rounded-2xl border border-slate-200 bg-white">
+        <Loader2 className="h-6 w-6 animate-spin text-brand-600" />
       </div>
     );
   }
 
   if (status === "unauthenticated") {
     return (
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-[#ef394e]">
+      <div className="card rounded-2xl p-5">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
           <LogIn className="h-6 w-6" />
         </div>
-        <h3 className="text-lg font-black text-slate-900">
+        <h3 className="text-base font-black text-ink">
           تجربه‌تان را به اشتراک بگذارید
         </h3>
         <p className="mt-2 text-sm leading-7 text-slate-500">
@@ -64,7 +64,7 @@ export default function ReviewForm({ productId }: ReviewFormProps) {
         </p>
         <Link
           href={`/login?callbackUrl=${encodeURIComponent(`/product/${productId}`)}`}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+          className="btn-primary mt-4 w-full py-2.5"
         >
           <LogIn className="h-4 w-4" />
           ورود و ثبت دیدگاه
@@ -77,11 +77,11 @@ export default function ReviewForm({ productId }: ReviewFormProps) {
     <form
       ref={formRef}
       action={formAction}
-      className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+      className="card rounded-2xl p-5"
     >
-      <div className="mb-6">
-        <p className="text-xs font-bold text-[#ef394e]">نظر شما مهم است</p>
-        <h3 className="mt-1 text-xl font-black text-slate-900">
+      <div className="mb-4">
+        <p className="text-xs font-bold text-brand-600">نظر شما مهم است</p>
+        <h3 className="mt-1 text-base font-black text-ink">
           ثبت دیدگاه جدید
         </h3>
         <p className="mt-2 text-xs leading-6 text-slate-500">
@@ -133,7 +133,7 @@ export default function ReviewForm({ productId }: ReviewFormProps) {
           rows={6}
           required
           placeholder="کیفیت، نقاط قوت و تجربه استفاده از محصول را بنویسید..."
-          className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#ef394e] focus:bg-white focus:ring-4 focus:ring-[#ef394e]/10"
+          className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/10"
         />
       </fieldset>
 
@@ -141,7 +141,7 @@ export default function ReviewForm({ productId }: ReviewFormProps) {
         {state.message && (
           <p
             className={`mt-2 text-xs font-bold ${
-              state.status === "success" ? "text-emerald-600" : "text-rose-600"
+              state.status === "success" ? "text-emerald-600" : "text-brand-700"
             }`}
           >
             {state.message}
@@ -152,7 +152,7 @@ export default function ReviewForm({ productId }: ReviewFormProps) {
       <button
         type="submit"
         disabled={pending}
-        className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ef394e] px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-rose-200 transition hover:bg-[#d82a3d] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-400 px-4 py-3.5 text-sm font-bold text-brand-900 shadow-lg shadow-brand-500/25 transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
       >
         {pending ? (
           <>

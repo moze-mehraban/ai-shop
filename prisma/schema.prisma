@@ -45,14 +45,24 @@ model User {
   reviews   Review[]
   orders    Order[]
   wishlist  Wishlist[]
-  }
+  addresses Address[]
+  stockNotifications StockNotification[]
+}
 
 // ۲. جدول دسته‌بندی محصولات
 model Category {
-  id       String    @id @default(cuid())
-  name     String
-  slug     String    @unique
-  products Product[]
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  sortOrder   Int        @default(0)
+  // زیرمجموعه‌ها: هر دسته می‌تواند یک والد داشته باشد
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Category[] @relation("CategoryTree")
+  products    Product[]
+
+  @@index([parentId])
 }
 
 // ۳. جدول محصولات
@@ -63,9 +73,16 @@ model Product {
   price       Float
   discountPercent Int      @default(0)
   stock       Int         @default(0)
-  imageUrl    String?
+  imageUrl    String?     // تصویر اصلی (کاور)
+  brand       String?
+  specs       Json?       // [{ "label": "رم", "value": "8GB" }, ...]
+  isActive    Boolean     @default(true) // محصول غیرفعال در فروشگاه نمایش داده نمی‌شود
   categoryId  String
-  category    Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  // حذف دسته‌ای که محصول دارد مجاز نیست (قبلاً همه محصولات پاک می‌شدند)
+  category    Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  images      ProductImage[]
+  variants    ProductVariant[]
+  stockNotifications StockNotification[]
 
   aiSummary   String?
   reviews     Review[]
@@ -90,6 +107,7 @@ model Review {
   product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   // فیلدهای اختصاصی هوش مصنوعی
+  isApproved  Boolean    @default(false) // نظر پس از تأیید مدیر نمایش داده می‌شود
   isAnalyzed  Boolean    @default(false)
   sentiment   Sentiment? // مثبت، منفی یا خنثی
   strengths   Json?      // لیست نقاط قوت به صورت JSON (مثلاً ["کیفیت ساخت", "عمر باتری"])
@@ -105,9 +123,25 @@ model Order {
   userId      String
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  totalAmount Float
+  totalAmount Float       // مبلغ نهایی قابل پرداخت
+  subtotal       Float    @default(0)
+  shippingCost   Float    @default(0)
+  discountAmount Float    @default(0)
+  couponCode     String?
   status      OrderStatus @default(PENDING)
   items       OrderItem[]
+
+  // اطلاعات ارسال (کپی از آدرس در لحظه ثبت سفارش)
+  recipientName   String?
+  recipientMobile String?
+  province        String?
+  city            String?
+  address         String?
+  postalCode      String?
+  shippingMethod  String?
+  trackingCode    String?
+  customerNote    String?
+  adminNote       String?
 
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -122,6 +156,10 @@ model OrderItem {
   productId String
   product   Product  @relation(fields: [productId], references: [id])
   
+  variantId   String?
+  variantName String?
+  title       String?  // عنوان محصول در لحظه خرید
+
   quantity  Int      @default(1)
   price     Float    // ثبت قیمت در لحظه خرید
 }
@@ -145,7 +183,100 @@ model VerificationCode {
   mobile    String
   code      String
   expiresAt DateTime
+  attempts  Int      @default(0) // تعداد تلاش ناموفق برای جلوگیری از حدس زدن کد
   createdAt DateTime @default(now())
 
   @@index([mobile])
+}
+
+// ۹. گالری تصاویر محصول
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int     @default(0)
+
+  @@index([productId])
+}
+
+// ۱۰. تنوع محصول (رنگ، سایز، حافظه و ...)
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String  // مثلاً «مشکی - ۱۲۸ گیگ»
+  price     Float?  // اگر خالی باشد قیمت محصول استفاده می‌شود
+  stock     Int     @default(0)
+  sortOrder Int     @default(0)
+
+  @@index([productId])
+}
+
+// ۱۱. دفترچه آدرس کاربر
+model Address {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String?  // مثلاً «خانه»
+  recipientName String
+  mobile        String
+  province      String
+  city          String
+  address       String
+  postalCode    String
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ۱۲. روش‌های ارسال
+model ShippingMethod {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  cost        Float   @default(0)
+  freeOver    Float?  // ارسال رایگان برای خرید بالاتر از این مبلغ
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+// ۱۳. کد تخفیف
+model Coupon {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  type        CouponType @default(PERCENT)
+  value       Float      // درصد یا مبلغ
+  maxDiscount Float?     // سقف تخفیف برای نوع درصدی
+  minOrder    Float      @default(0)
+  maxUses     Int?
+  usedCount   Int        @default(0)
+  expiresAt   DateTime?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+}
+
+// ۱۴. «موجود شد خبرم کن»
+model StockNotification {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime?
+
+  @@unique([userId, productId])
+}
+
+// ۱۵. تنظیمات فروشگاه (اطلاعات تماس، متن صفحات قوانین و ...)
+model Setting {
+  key   String @id
+  value String
 }

@@ -5,6 +5,34 @@ import { prisma } from "@/lib/prisma";
 import type { OrderStatus, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { summarizeReviewsWithOpenRouter } from "@/lib/openrouter";
+import { ORDER_STATUS_LABELS } from "@/lib/checkout";
+import { sendSmsIrTemplate } from "@/lib/smsir";
+
+// پیامک تغییر وضعیت سفارش به مشتری (در صورت تنظیم SMSIR_STATUS_TEMPLATE_ID)
+async function notifyOrderStatus(orderId: string) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      status: true,
+      trackingCode: true,
+      recipientMobile: true,
+      user: { select: { mobile: true } },
+    },
+  });
+  const mobile = order?.recipientMobile || order?.user.mobile;
+  if (!order || !mobile) return;
+
+  await sendSmsIrTemplate({
+    mobile,
+    templateEnv: "SMSIR_STATUS_TEMPLATE_ID",
+    parameters: {
+      ORDER: order.id.slice(-8).toUpperCase(),
+      STATUS: ORDER_STATUS_LABELS[order.status],
+      TRACKING: order.trackingCode || "-",
+    },
+  });
+}
 
 export type GenerateSummaryState = {
   status: "idle" | "success" | "error";
@@ -23,172 +51,6 @@ const roles: Role[] = ["USER", "ADMIN"];
 
 function getRequiredText(formData: FormData, field: string) {
   return String(formData.get(field) ?? "").trim();
-}
-
-function getNumber(formData: FormData, field: string) {
-  return Number(formData.get(field));
-}
-
-function createSlug(value: string) {
-  return value
-    .normalize("NFKC")
-    .toLowerCase()
-    .trim()
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export async function createCategoryAction(formData: FormData) {
-  await requireAdmin("/admin/products");
-
-  const name = getRequiredText(formData, "name");
-  const submittedSlug = getRequiredText(formData, "slug");
-  const slug = createSlug(submittedSlug || name);
-
-  if (name.length < 2 || !slug) {
-    return;
-  }
-
-  await prisma.category.create({
-    data: { name, slug },
-  });
-
-  revalidatePath("/");
-  revalidatePath("/admin/products");
-}
-
-export async function deleteCategoryAction(formData: FormData) {
-  await requireAdmin("/admin/products");
-
-  const categoryId = getRequiredText(formData, "categoryId");
-  const productCount = await prisma.product.count({
-    where: { categoryId },
-  });
-
-  if (productCount > 0) {
-    return;
-  }
-
-  await prisma.category.delete({
-    where: { id: categoryId },
-  });
-
-  revalidatePath("/admin/products");
-}
-
-export async function createProductAction(formData: FormData) {
-  await requireAdmin("/admin/products");
-
-  const title = getRequiredText(formData, "title");
-  const description = getRequiredText(formData, "description");
-  const imageUrl = getRequiredText(formData, "imageUrl");
-  const categoryId = getRequiredText(formData, "categoryId");
-  const price = getNumber(formData, "price");
-  const discountPercent = getNumber(formData, "discountPercent");
-  const stock = getNumber(formData, "stock");
-
-  if (
-    title.length < 2 ||
-    description.length < 3 ||
-    !categoryId ||
-    !Number.isFinite(price) ||
-    price < 0 ||
-    !Number.isInteger(discountPercent) ||
-    discountPercent < 0 ||
-    discountPercent > 90 ||
-    !Number.isInteger(stock) ||
-    stock < 0
-  ) {
-    return;
-  }
-
-  await prisma.product.create({
-    data: {
-      title,
-      description,
-      imageUrl: imageUrl || null,
-      categoryId,
-      price,
-      discountPercent,
-      stock,
-    },
-  });
-
-  revalidatePath("/");
-  revalidatePath("/admin");
-  revalidatePath("/admin/products");
-}
-
-export async function updateProductAction(formData: FormData) {
-  await requireAdmin("/admin/products");
-
-  const productId = getRequiredText(formData, "productId");
-  const title = getRequiredText(formData, "title");
-  const description = getRequiredText(formData, "description");
-  const imageUrl = getRequiredText(formData, "imageUrl");
-  const categoryId = getRequiredText(formData, "categoryId");
-  const aiSummary = getRequiredText(formData, "aiSummary");
-  const price = getNumber(formData, "price");
-  const discountPercent = getNumber(formData, "discountPercent");
-  const stock = getNumber(formData, "stock");
-
-  if (
-    !productId ||
-    title.length < 2 ||
-    description.length < 3 ||
-    !categoryId ||
-    !Number.isFinite(price) ||
-    price < 0 ||
-    !Number.isInteger(discountPercent) ||
-    discountPercent < 0 ||
-    discountPercent > 90 ||
-    !Number.isInteger(stock) ||
-    stock < 0
-  ) {
-    return;
-  }
-
-  await prisma.product.update({
-    where: { id: productId },
-    data: {
-      title,
-      description,
-      imageUrl: imageUrl || null,
-      category: {
-        connect: { id: categoryId },
-      },
-      aiSummary: aiSummary || null,
-      price,
-      discountPercent,
-      stock,
-    },
-  });
-
-  revalidatePath("/");
-  revalidatePath(`/product/${productId}`);
-  revalidatePath("/admin");
-  revalidatePath("/admin/products");
-}
-
-export async function deleteProductAction(formData: FormData) {
-  await requireAdmin("/admin/products");
-
-  const productId = getRequiredText(formData, "productId");
-  const orderItemCount = await prisma.orderItem.count({
-    where: { productId },
-  });
-
-  if (orderItemCount > 0) {
-    return;
-  }
-
-  await prisma.product.delete({
-    where: { id: productId },
-  });
-
-  revalidatePath("/");
-  revalidatePath("/admin");
-  revalidatePath("/admin/products");
 }
 
 export async function generateProductSummaryAction(
@@ -316,13 +178,17 @@ export async function advanceOrderStatusAction(formData: FormData) {
     return;
   }
 
-  await prisma.order.updateMany({
+  const updated = await prisma.order.updateMany({
     where: {
       id: orderId,
       status: order.status,
     },
     data: { status: nextStatus },
   });
+
+  if (updated.count === 1) {
+    await notifyOrderStatus(orderId);
+  }
 
   revalidatePath("/admin");
   revalidatePath("/admin/orders");
@@ -344,9 +210,11 @@ export async function cancelOrderAction(formData: FormData) {
         where: { id: orderId },
         select: {
           status: true,
+          couponCode: true,
           items: {
             select: {
               productId: true,
+              variantId: true,
               quantity: true,
             },
           },
@@ -378,6 +246,22 @@ export async function cancelOrderAction(formData: FormData) {
           item.productId,
           (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity,
         );
+      }
+
+      if (order.couponCode) {
+        await transaction.coupon.updateMany({
+          where: { code: order.couponCode, usedCount: { gt: 0 } },
+          data: { usedCount: { decrement: 1 } },
+        });
+      }
+
+      for (const item of order.items) {
+        if (item.variantId) {
+          await transaction.productVariant.updateMany({
+            where: { id: item.variantId },
+            data: { stock: { increment: item.quantity } },
+          });
+        }
       }
 
       for (const [productId, quantity] of quantitiesByProduct) {
@@ -455,4 +339,40 @@ export async function deleteReviewAction(formData: FormData) {
   if (productId) {
     revalidatePath(`/product/${productId}`);
   }
+}
+
+export async function updateOrderInfoAction(formData: FormData) {
+  await requireAdmin("/admin/orders");
+
+  const orderId = getRequiredText(formData, "orderId");
+  const trackingCode = getRequiredText(formData, "trackingCode").slice(0, 60) || null;
+  const adminNote = getRequiredText(formData, "adminNote").slice(0, 2000) || null;
+
+  if (!orderId) return;
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { trackingCode, adminNote },
+  });
+
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/profile/orders/${orderId}`);
+}
+
+export async function setReviewApprovalAction(formData: FormData) {
+  await requireAdmin("/admin/reviews");
+
+  const reviewId = getRequiredText(formData, "reviewId");
+  const approve = getRequiredText(formData, "approve") === "1";
+
+  const review = await prisma.review.update({
+    where: { id: reviewId },
+    data: { isApproved: approve },
+    select: { productId: true },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/reviews");
+  revalidatePath(`/product/${review.productId}`);
 }

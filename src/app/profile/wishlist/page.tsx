@@ -28,9 +28,9 @@ export default async function WishlistPage() {
       <main className="max-w-4xl mx-auto space-y-6 py-8 px-4">
         
         {/* هدر صفحه */}
-        <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between card rounded-2xl p-6">
           <div className="flex items-center gap-3">
-            <div className="bg-rose-50 p-3 rounded-xl text-rose-500">
+            <div className="bg-brand-50 p-3 rounded-xl text-brand-600">
               <Heart className="w-6 h-6 fill-current" />
             </div>
             <div>
@@ -40,7 +40,7 @@ export default async function WishlistPage() {
           </div>
           <Link
             href="/"
-            className="flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-[#ef394e] transition-colors"
+            className="flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-brand-600 transition-colors"
           >
             <span>بازگشت به فروشگاه</span>
             <ArrowRight className="w-4 h-4" />
@@ -59,7 +59,7 @@ export default async function WishlistPage() {
             </div>
             <Link
               href="/"
-              className="inline-block bg-[#ef394e] text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg shadow-[#ef394e]/20 hover:bg-[#d82a3f] transition-colors"
+              className="inline-block bg-brand-400 text-brand-900 font-bold text-xs px-6 py-3 rounded-xl shadow-lg shadow-brand-500/20 hover:bg-brand-500 transition-colors"
             >
               مشاهده محصولات
             </Link>
@@ -73,7 +73,7 @@ export default async function WishlistPage() {
                 product.discountPercent,
               );
               return (
-                <div key={item.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4">
+                <div key={item.id} className="card rounded-2xl p-5 flex flex-col justify-between space-y-4">
                   <div className="flex items-start gap-4">
                     <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-400 shrink-0 overflow-hidden">
                       {product.imageUrl ? (
@@ -92,10 +92,10 @@ export default async function WishlistPage() {
                     <div className="space-y-1 flex-1">
                       <h3 className="font-bold text-slate-800 text-sm line-clamp-1">{product.title}</h3>
                       <p className="text-xs text-slate-500 line-clamp-2">{product.description}</p>
-                      <div className="pt-2 font-bold text-slate-900 text-xs">
+                      <div className="pt-2 font-bold text-ink text-xs">
                         {finalPrice.toLocaleString("fa-IR")} تومان
                         {product.discountPercent > 0 && (
-                          <span className="mr-2 rounded-full bg-rose-50 px-2 py-1 text-[10px] text-rose-600">
+                          <span className="mr-2 rounded-full bg-brand-50 px-2 py-1 text-[10px] text-brand-700">
                             {product.discountPercent.toLocaleString("fa-IR")}٪
                             تخفیف
                           </span>

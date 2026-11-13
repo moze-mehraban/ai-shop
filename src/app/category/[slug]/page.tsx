@@ -1,79 +1,115 @@
 import DigikalaHeader from "@/components/DigikalaHeader";
-import ProductCard from "@/components/ProductCard";
-import { prisma } from "@/lib/prisma";
-import { ChevronLeft, PackageSearch } from "lucide-react";
+import ProductListing from "@/components/ProductListing";
+import SiteFooter from "@/components/SiteFooter";
+import { parseCatalogParams, queryCatalog, type CatalogParams } from "@/lib/catalog";
+import { getAncestors, getCategoryTree, getDescendantIds } from "@/lib/categories";
+import { getSettings } from "@/lib/settings";
+import { ChevronLeft } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const revalidate = 0;
 
-export default async function CategoryPage({
-  params,
-}: {
+type Props = {
   params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-  const category = await prisma.category.findUnique({
-    where: { slug },
-    include: {
-      products: {
-        include: {
-          category: true,
-          reviews: {
-            select: { rating: true },
-          },
-        },
-        orderBy: [{ stock: "desc" }, { createdAt: "desc" }],
-      },
-    },
-  });
+  searchParams: Promise<CatalogParams>;
+};
 
-  if (!category) {
+async function findCategory(slug: string) {
+  const { nodes, totals } = await getCategoryTree();
+  const decoded = decodeURIComponent(slug);
+  const node = [...nodes.values()].find((item) => item.slug === decoded);
+  return node ? { node, nodes, totals } : null;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const [found, settings] = await Promise.all([findCategory(slug), getSettings()]);
+
+  if (!found) return {};
+
+  return {
+    title: `خرید ${found.node.name}`,
+    description:
+      found.node.description ||
+      `خرید آنلاین ${found.node.name} با بهترین قیمت از ${settings.shopName}`,
+    alternates: { canonical: `/category/${found.node.slug}` },
+  };
+}
+
+export default async function CategoryPage({ params, searchParams }: Props) {
+  const { slug } = await params;
+  const rawParams = await searchParams;
+  const found = await findCategory(slug);
+
+  if (!found) {
     notFound();
   }
 
+  const { node, nodes, totals } = found;
+  const ancestors = getAncestors(node, nodes);
+  const parsed = parseCatalogParams(rawParams);
+  const result = await queryCatalog(
+    { categoryId: { in: getDescendantIds(node) } },
+    parsed,
+    undefined,
+    node.id,
+  );
+
   return (
-    <div className="min-h-screen bg-[#f7f8fa]">
+    <div className="min-h-screen bg-canvas">
       <DigikalaHeader />
-      <main className="mx-auto max-w-[1400px] px-4 py-8">
-        <nav className="mb-5 flex items-center gap-2 text-xs text-slate-400">
-          <Link href="/" className="transition hover:text-[#ef394e]">
+      <main className="mx-auto max-w-[1400px] px-4 py-6 md:py-8">
+        <nav aria-label="مسیر صفحه" className="mb-5 flex flex-wrap items-center gap-1 text-xs text-slate-500">
+          <Link href="/" className="transition hover:text-brand-600">
             فروشگاه
           </Link>
-          <ChevronLeft className="h-4 w-4" />
-          <span className="font-bold text-slate-700">{category.name}</span>
+          {ancestors.map((ancestor) => (
+            <span key={ancestor.id} className="flex items-center gap-1">
+              <ChevronLeft className="h-4 w-4 text-slate-300" />
+              <Link href={`/category/${ancestor.slug}`} className="transition hover:text-brand-600">
+                {ancestor.name}
+              </Link>
+            </span>
+          ))}
+          <ChevronLeft className="h-4 w-4 text-slate-300" />
+          <span className="font-bold text-slate-700">{node.name}</span>
         </nav>
 
-        <section className="mb-7 rounded-[2rem] bg-gradient-to-l from-slate-900 to-slate-800 p-7 text-white shadow-xl md:p-9">
-          <p className="text-xs font-bold text-rose-300">دسته‌بندی محصولات</p>
-          <h1 className="mt-2 text-3xl font-black">{category.name}</h1>
-          <p className="mt-3 text-sm text-slate-400">
-            {category.products.length.toLocaleString("fa-IR")} محصول در این
-            دسته‌بندی
-          </p>
+        <section className="mb-6">
+          <h1 className="text-2xl font-black text-ink md:text-3xl">{node.name}</h1>
+          {node.description && (
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-500">{node.description}</p>
+          )}
+
+          {node.children.length > 0 && (
+            <div className="mt-5 flex gap-2 overflow-x-auto overflow-y-hidden no-scrollbar pb-1">
+              {node.children.map((child) => (
+                <Link
+                  key={child.id}
+                  href={`/category/${child.slug}`}
+                  className="flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-brand-300 hover:text-brand-700"
+                >
+                  {child.name}
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                    {(totals.get(child.id) ?? 0).toLocaleString("fa-IR")}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
 
-        {category.products.length > 0 ? (
-          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {category.products.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </section>
-        ) : (
-          <section className="flex min-h-80 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white text-center">
-            <PackageSearch className="h-12 w-12 text-slate-300" />
-            <h2 className="mt-4 font-black text-slate-700">
-              محصولی در این دسته نیست
-            </h2>
-            <Link
-              href="/"
-              className="mt-5 rounded-xl bg-[#ef394e] px-5 py-2.5 text-xs font-bold text-white"
-            >
-              بازگشت به فروشگاه
-            </Link>
-          </section>
-        )}
+        <ProductListing
+          basePath={`/category/${node.slug}`}
+          params={rawParams}
+          parsed={parsed}
+          {...result}
+          emptyTitle="محصولی در این دسته‌بندی پیدا نشد"
+        />
       </main>
+      <SiteFooter />
     </div>
   );
 }

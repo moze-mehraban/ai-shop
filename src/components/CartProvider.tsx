@@ -10,6 +10,8 @@ import {
 
 export type CartItem = {
   productId: string;
+  variantId?: string | null;
+  variantName?: string | null;
   title: string;
   price: number;
   imageUrl: string | null;
@@ -19,13 +21,18 @@ export type CartItem = {
 
 type AddCartItem = Omit<CartItem, "quantity">;
 
+// هر ردیف سبد با «محصول + تنوع» شناخته می‌شود
+export function getCartKey(item: Pick<CartItem, "productId" | "variantId">) {
+  return item.variantId ? `${item.productId}::${item.variantId}` : item.productId;
+}
+
 type CartContextValue = {
   items: CartItem[];
   itemCount: number;
   totalPrice: number;
   addItem: (item: AddCartItem, quantity?: number) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
-  removeItem: (productId: string) => void;
+  updateQuantity: (key: string, quantity: number) => void;
+  removeItem: (key: string) => void;
   clearCart: () => void;
 };
 
@@ -94,15 +101,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addItem = useCallback((item: AddCartItem, quantity = 1) => {
     const currentItems = readCart();
+    const key = getCartKey(item);
     const existingItem = currentItems.find(
-      (cartItem) => cartItem.productId === item.productId,
+      (cartItem) => getCartKey(cartItem) === key,
     );
     const safeQuantity = Math.max(1, Math.min(quantity, item.stock));
 
     if (existingItem) {
       saveCart(
         currentItems.map((cartItem) =>
-          cartItem.productId === item.productId
+          getCartKey(cartItem) === key
             ? {
                 ...cartItem,
                 ...item,
@@ -121,13 +129,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateQuantity = useCallback(
-    (productId: string, quantity: number) => {
+    (key: string, quantity: number) => {
       const currentItems = readCart();
 
       saveCart(
         currentItems
           .map((item) =>
-            item.productId === productId
+            getCartKey(item) === key
               ? {
                   ...item,
                   quantity: Math.max(0, Math.min(quantity, item.stock)),
@@ -140,10 +148,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const removeItem = useCallback((productId: string) => {
-    saveCart(
-      readCart().filter((cartItem) => cartItem.productId !== productId),
-    );
+  const removeItem = useCallback((key: string) => {
+    saveCart(readCart().filter((cartItem) => getCartKey(cartItem) !== key));
   }, []);
 
   const clearCart = useCallback(() => {

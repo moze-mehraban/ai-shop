@@ -37,7 +37,7 @@ export default async function AdminUsersPage() {
     <div className="space-y-7">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-bold text-[#ef394e]">مدیریت دسترسی</p>
+          <p className="text-xs font-bold text-brand-600">مدیریت دسترسی</p>
           <h1 className="mt-1 text-3xl font-black text-slate-900">کاربران</h1>
           <p className="mt-2 text-sm text-slate-500">
             حساب‌ها، فعالیت‌ها و سطح دسترسی مدیران را کنترل کنید.
@@ -130,7 +130,7 @@ export default async function AdminUsersPage() {
               <select
                 name="role"
                 defaultValue={user.role}
-                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-[#ef394e]"
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-brand-500"
               >
                 {(["USER", "ADMIN"] as Role[]).map((role) => (
                   <option key={role} value={role}>

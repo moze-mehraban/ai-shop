@@ -1,10 +1,16 @@
 'use server';
 
+import { randomInt } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { sendBaleOtp } from "@/lib/bale";
+import { MOBILE_PATTERN, normalizeMobile } from "@/lib/digits";
+import { sendSmsIrOtp } from "@/lib/smsir";
 
-export async function requestOtpAction(mobile: string) {
-  if (!/^09\d{9}$/.test(mobile)) {
+const MAX_CODES_PER_HOUR = 5;
+
+export async function requestOtpAction(rawMobile: string) {
+  const mobile = normalizeMobile(String(rawMobile ?? ""));
+
+  if (!MOBILE_PATTERN.test(mobile)) {
     return { success: false, error: "شماره موبایل نامعتبر است. (مثال: 09123456789)" };
   }
 
@@ -25,34 +31,53 @@ export async function requestOtpAction(mobile: string) {
     };
   }
 
+  // محدودیت تعداد درخواست کد در هر ساعت (جلوگیری از هدر رفتن اعتبار پیامک)
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  await prisma.verificationCode.deleteMany({
+    where: { mobile, createdAt: { lt: hourAgo } },
+  });
+  const codesThisHour = await prisma.verificationCode.count({
+    where: { mobile },
+  });
+
+  if (codesThisHour >= MAX_CODES_PER_HOUR) {
+    return {
+      success: false,
+      error: "تعداد درخواست‌ها زیاد است. لطفاً یک ساعت دیگر دوباره تلاش کنید.",
+    };
+  }
+
   // تولید کد ۵ رقمی تصادفی
-  const code = Math.floor(10000 + Math.random() * 90000).toString();
+  const code = randomInt(10000, 100000).toString();
   const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // انقضا پس از ۲ دقیقه
 
-  // حذف کدهای قبلی و ذخیره کد جدید
-  await prisma.verificationCode.deleteMany({ where: { mobile } });
+  // کدهای قبلی باطل می‌شوند (منقضی) ولی برای شمارش محدودیت ساعتی نگه داشته می‌شوند
+  await prisma.verificationCode.updateMany({
+    where: { mobile, expiresAt: { gt: new Date() } },
+    data: { expiresAt: new Date() },
+  });
   await prisma.verificationCode.create({
     data: { mobile, code, expiresAt },
   });
 
   try {
-    await sendBaleOtp({ mobile, code });
+    await sendSmsIrOtp({ mobile, code });
   } catch (error) {
     await prisma.verificationCode.deleteMany({
       where: { mobile, code },
     });
 
     console.error(
-      "Bale OTP delivery failed:",
+      "SMS OTP delivery failed:",
       error instanceof Error ? error.message : "Unknown error",
     );
 
     return {
       success: false,
       error:
-        error instanceof Error && error.message === "BALE_NOT_CONFIGURED"
-          ? "تنظیمات ربات بله کامل نشده است."
-          : "ارسال کد در بله انجام نشد. لطفاً دوباره تلاش کنید.",
+        error instanceof Error && error.message === "SMSIR_NOT_CONFIGURED"
+          ? "تنظیمات سرویس پیامک کامل نشده است."
+          : "ارسال پیامک انجام نشد. لطفاً دوباره تلاش کنید.",
     };
   }
   console.log(`\n=================================`);
@@ -60,5 +85,5 @@ export async function requestOtpAction(mobile: string) {
   console.log(`=================================\n`);
 
 
-  return { success: true };
+  return { success: true, mobile };
 }

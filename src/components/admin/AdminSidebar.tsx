@@ -3,6 +3,9 @@
 import {
   Boxes,
   ClipboardList,
+  FolderTree,
+  Settings,
+  TicketPercent,
   LayoutDashboard,
   MessageSquareText,
   ShoppingBag,
@@ -19,8 +22,13 @@ const navigationItems = [
   },
   {
     href: "/admin/products",
-    label: "محصولات و دسته‌ها",
+    label: "محصولات",
     icon: Boxes,
+  },
+  {
+    href: "/admin/categories",
+    label: "دسته‌بندی‌ها",
+    icon: FolderTree,
   },
   {
     href: "/admin/orders",
@@ -37,9 +45,19 @@ const navigationItems = [
     label: "دیدگاه‌ها",
     icon: MessageSquareText,
   },
+  {
+    href: "/admin/coupons",
+    label: "کدهای تخفیف",
+    icon: TicketPercent,
+  },
+  {
+    href: "/admin/settings",
+    label: "تنظیمات فروشگاه",
+    icon: Settings,
+  },
 ];
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ shopName }: { shopName: string }) {
   const pathname = usePathname();
 
   return (
@@ -47,11 +65,11 @@ export default function AdminSidebar() {
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between px-5 py-5 lg:block lg:px-7 lg:py-8">
           <Link href="/admin" className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ef394e] shadow-lg shadow-rose-950/40">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-500 shadow-lg shadow-brand-900/40">
               <ClipboardList className="h-6 w-6" />
             </div>
             <div>
-              <p className="font-black">مدیریت AI-Shop</p>
+              <p className="max-w-[10rem] truncate font-black" dir="auto">مدیریت {shopName}</p>
               <p className="mt-0.5 text-[10px] text-slate-400">
                 مرکز کنترل فروشگاه
               </p>
@@ -65,7 +83,7 @@ export default function AdminSidebar() {
           </Link>
         </div>
 
-        <nav className="flex gap-2 overflow-x-auto px-4 pb-4 lg:flex-col lg:overflow-visible lg:px-5 lg:pb-0">
+        <nav className="flex gap-2 overflow-x-auto overflow-y-hidden no-scrollbar px-4 pb-4 lg:flex-col lg:overflow-visible lg:px-5 lg:pb-0">
           {navigationItems.map((item) => {
             const isActive =
               item.href === "/admin"

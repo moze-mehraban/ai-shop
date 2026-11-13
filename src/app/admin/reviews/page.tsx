@@ -1,4 +1,4 @@
-import { deleteReviewAction } from "@/app/actions/adminActions";
+import { deleteReviewAction, setReviewApprovalAction } from "@/app/actions/adminActions";
 import AdminSubmitButton from "@/components/admin/AdminSubmitButton";
 import { prisma } from "@/lib/prisma";
 import {
@@ -12,9 +12,17 @@ import Link from "next/link";
 
 export const revalidate = 0;
 
-export default async function AdminReviewsPage() {
-  const [reviews, aggregate, analyzedCount] = await Promise.all([
+export default async function AdminReviewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
+  const { filter } = await searchParams;
+  const showPending = filter !== "all";
+  const [reviews, aggregate, analyzedCount, pendingCount] = await Promise.all([
     prisma.review.findMany({
+      where: showPending ? { isApproved: false } : undefined,
+      take: 200,
       include: {
         product: {
           select: {
@@ -37,13 +45,14 @@ export default async function AdminReviewsPage() {
       _count: { _all: true },
     }),
     prisma.review.count({ where: { isAnalyzed: true } }),
+    prisma.review.count({ where: { isApproved: false } }),
   ]);
 
   return (
     <div className="space-y-7">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-bold text-[#ef394e]">کنترل محتوا</p>
+          <p className="text-xs font-bold text-brand-600">کنترل محتوا</p>
           <h1 className="mt-1 text-3xl font-black text-slate-900">
             مدیریت دیدگاه‌ها
           </h1>
@@ -74,11 +83,26 @@ export default async function AdminReviewsPage() {
         </div>
       </div>
 
+      <div className="flex gap-2">
+        <Link
+          href="/admin/reviews"
+          className={`rounded-full px-4 py-2 text-xs font-bold ${showPending ? "bg-ink text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}
+        >
+          در انتظار تأیید ({pendingCount.toLocaleString("fa-IR")})
+        </Link>
+        <Link
+          href="/admin/reviews?filter=all"
+          className={`rounded-full px-4 py-2 text-xs font-bold ${!showPending ? "bg-ink text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}
+        >
+          همه دیدگاه‌ها
+        </Link>
+      </div>
+
       <section className="space-y-4">
         {reviews.map((review) => (
           <article
             key={review.id}
-            className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6"
+            className="card rounded-3xl p-5 md:p-6"
           >
             <div className="flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
@@ -96,6 +120,13 @@ export default async function AdminReviewsPage() {
                     {review.rating.toLocaleString("fa-IR")}
                     <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                   </span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+                      review.isApproved ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700"
+                    }`}
+                  >
+                    {review.isApproved ? "منتشرشده" : "در انتظار تأیید"}
+                  </span>
                   {review.isAnalyzed && (
                     <span className="flex items-center gap-1 rounded-full bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-700">
                       <Sparkles className="h-3 w-3" />
@@ -105,7 +136,7 @@ export default async function AdminReviewsPage() {
                 </div>
                 <Link
                   href={`/product/${review.product.id}`}
-                  className="mt-1 block truncate text-xs font-bold text-sky-600 hover:text-sky-700"
+                  className="mt-1 block truncate text-xs font-bold text-brand-700 hover:text-brand-700"
                 >
                   {review.product.title}
                 </Link>
@@ -116,6 +147,19 @@ export default async function AdminReviewsPage() {
                   {review.createdAt.toLocaleString("fa-IR")}
                 </p>
               </div>
+              <div className="flex shrink-0 flex-col gap-2">
+              <form action={setReviewApprovalAction}>
+                <input type="hidden" name="reviewId" value={review.id} />
+                <input type="hidden" name="approve" value={review.isApproved ? "0" : "1"} />
+                <AdminSubmitButton
+                  className={`rounded-xl px-3 py-2 text-xs font-bold ${
+                    review.isApproved ? "border border-slate-200 bg-white text-slate-600" : "bg-emerald-600 text-white"
+                  }`}
+                  pendingLabel="..."
+                >
+                  {review.isApproved ? "عدم انتشار" : "تأیید و انتشار"}
+                </AdminSubmitButton>
+              </form>
               <form action={deleteReviewAction}>
                 <input type="hidden" name="reviewId" value={review.id} />
                 <input
@@ -124,12 +168,14 @@ export default async function AdminReviewsPage() {
                   value={review.productId}
                 />
                 <AdminSubmitButton
-                  className="rounded-xl border border-rose-100 bg-rose-50 p-2.5 text-rose-500 transition hover:bg-rose-100"
+                  className="w-full rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-100"
                   pendingLabel=""
                 >
                   <Trash2 className="h-4 w-4" />
+                  حذف
                 </AdminSubmitButton>
               </form>
+              </div>
             </div>
           </article>
         ))}

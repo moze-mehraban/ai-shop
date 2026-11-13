@@ -1,6 +1,9 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { MOBILE_PATTERN, normalizeDigits, normalizeMobile } from "@/lib/digits";
 import { prisma } from "@/lib/prisma";
+
+const MAX_OTP_ATTEMPTS = 5;
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -11,24 +14,36 @@ export const authOptions: NextAuthOptions = {
         code: { label: "Code", type: "text" },
       },
       async authorize(credentials) {
-        const mobile = credentials?.mobile as string;
-        const code = credentials?.code as string;
+        const mobile = normalizeMobile(String(credentials?.mobile ?? ""));
+        const code = normalizeDigits(String(credentials?.code ?? "")).trim();
 
-        if (!mobile || !code) return null;
+        if (!MOBILE_PATTERN.test(mobile) || !/^\d{5}$/.test(code)) return null;
 
-        // بررسی اعتبار کد تایید در دیتابیس
-        const validOtp = await prisma.verificationCode.findFirst({
-          where: {
-            mobile,
-            code,
-            expiresAt: { gt: new Date() },
-          },
+        // فقط آخرین کد فعال این شماره بررسی می‌شود
+        const activeOtp = await prisma.verificationCode.findFirst({
+          where: { mobile, expiresAt: { gt: new Date() } },
+          orderBy: { createdAt: "desc" },
         });
 
-        if (!validOtp) return null;
+        if (!activeOtp) return null;
 
-        // حذف کد مصرف‌شده
-        await prisma.verificationCode.delete({ where: { id: validOtp.id } });
+        if (activeOtp.code !== code) {
+          // بعد از ۵ تلاش اشتباه، کد باطل می‌شود
+          await prisma.verificationCode.update({
+            where: { id: activeOtp.id },
+            data:
+              activeOtp.attempts + 1 >= MAX_OTP_ATTEMPTS
+                ? { attempts: { increment: 1 }, expiresAt: new Date() }
+                : { attempts: { increment: 1 } },
+          });
+          return null;
+        }
+
+        // کد مصرف‌شده باطل می‌شود (رکورد برای محدودیت ساعتی باقی می‌ماند)
+        await prisma.verificationCode.update({
+          where: { id: activeOtp.id },
+          data: { expiresAt: new Date() },
+        });
 
         // ثبت‌نام یا ورود کاربر
         const user = await prisma.user.upsert({
@@ -47,7 +62,10 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: { strategy: "jwt" },
-  secret: process.env.NEXTAUTH_SECRET || "default_secret_for_dev",
+  // در محیط production حتماً باید NEXTAUTH_SECRET تنظیم شود
+  secret:
+    process.env.NEXTAUTH_SECRET ||
+    (process.env.NODE_ENV === "production" ? undefined : "default_secret_for_dev"),
   pages: {
     signIn: "/login",
   },
@@ -65,7 +83,7 @@ export const authOptions: NextAuthOptions = {
         });
 
         token.role = user?.role || "USER";
-        token.name = user?.name || user?.mobile || "کاربر AI-Shop";
+        token.name = user?.name || user?.mobile || "کاربر";
         token.email = user?.email || undefined;
       }
 

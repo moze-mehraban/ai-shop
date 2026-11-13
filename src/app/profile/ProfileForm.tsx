@@ -37,11 +37,11 @@ export default function ProfileForm({
   return (
     <form
       action={formAction}
-      className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8"
+      className="card rounded-3xl p-6 md:p-8"
     >
       <div className="mb-7">
-        <p className="text-xs font-bold text-[#ef394e]">اطلاعات شخصی</p>
-        <h2 className="mt-1 text-xl font-black text-slate-900">
+        <p className="text-xs font-bold text-brand-600">اطلاعات شخصی</p>
+        <h2 className="mt-1 text-xl font-black text-ink">
           تکمیل حساب کاربری
         </h2>
         <p className="mt-2 text-xs leading-6 text-slate-500">
@@ -64,7 +64,7 @@ export default function ProfileForm({
               required
               autoComplete="name"
               placeholder="مثلاً اصفر فرهادی"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pr-10 pl-4 text-sm text-slate-800 outline-none transition focus:border-[#ef394e] focus:bg-white focus:ring-4 focus:ring-[#ef394e]/10"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pr-10 pl-4 text-sm text-slate-800 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/10"
             />
           </div>
         </label>
@@ -84,7 +84,7 @@ export default function ProfileForm({
               autoComplete="email"
               dir="ltr"
               placeholder="name@example.com"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pr-10 pl-4 text-left text-sm text-slate-800 outline-none transition focus:border-[#ef394e] focus:bg-white focus:ring-4 focus:ring-[#ef394e]/10"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pr-10 pl-4 text-left text-sm text-slate-800 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/10"
             />
           </div>
         </label>
@@ -114,7 +114,7 @@ export default function ProfileForm({
             className={`mt-4 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold ${
               state.status === "success"
                 ? "bg-emerald-50 text-emerald-700"
-                : "bg-rose-50 text-rose-600"
+                : "bg-brand-50 text-brand-700"
             }`}
           >
             {state.status === "success" && (
@@ -128,7 +128,7 @@ export default function ProfileForm({
       <button
         type="submit"
         disabled={pending}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ef394e] px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-rose-200 transition hover:bg-[#d82a3d] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-400 px-5 py-3.5 text-sm font-bold text-brand-900 shadow-lg shadow-brand-500/25 transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
       >
         {pending && <Loader2 className="h-4 w-4 animate-spin" />}
         {pending ? "در حال ذخیره..." : "ذخیره اطلاعات"}

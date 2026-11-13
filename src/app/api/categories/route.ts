@@ -1,26 +1,25 @@
-import { prisma } from "@/lib/prisma";
+import { getCategoryTree, type CategoryNode } from "@/lib/categories";
+
+export const dynamic = "force-dynamic";
+
+type HeaderCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  productCount: number;
+  children: HeaderCategory[];
+};
 
 export async function GET() {
-  const categories = await prisma.category.findMany({
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      _count: {
-        select: {
-          products: true,
-        },
-      },
-    },
-    orderBy: { name: "asc" },
+  const { roots, totals } = await getCategoryTree();
+
+  const toJson = (node: CategoryNode): HeaderCategory => ({
+    id: node.id,
+    name: node.name,
+    slug: node.slug,
+    productCount: totals.get(node.id) ?? 0,
+    children: node.children.map(toJson),
   });
 
-  return Response.json(
-    categories.map((category) => ({
-      id: category.id,
-      name: category.name,
-      slug: category.slug,
-      productCount: category._count.products,
-    })),
-  );
+  return Response.json(roots.map(toJson));
 }

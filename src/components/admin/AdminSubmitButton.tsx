@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionFormPending } from "@/components/admin/ActionForm";
 import { Loader2 } from "lucide-react";
 import { useFormStatus } from "react-dom";
 
@@ -12,7 +13,10 @@ export default function AdminSubmitButton({
   className?: string;
   pendingLabel?: string;
 }) {
-  const { pending } = useFormStatus();
+  const { pending: formPending } = useFormStatus();
+  // داخل ActionForm وضعیت از خود فرم می‌آید؛ در فرم‌های ساده از useFormStatus
+  const actionFormPending = useActionFormPending();
+  const pending = actionFormPending ?? formPending;
 
   return (
     <button
